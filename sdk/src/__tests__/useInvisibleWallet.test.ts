@@ -218,10 +218,18 @@ describe('useInvisibleWallet', () => {
 
       const { result } = renderHook(() => useInvisibleWallet(CONFIG))
 
+      // Capture the rejection inside act() to flush React state updates
+      let caughtError: Error | null = null
       await act(async () => {
-        await expect(result.current.register()).rejects.toThrow('NotAllowedError')
+        try {
+          await result.current.register()
+        } catch (e) {
+          caughtError = e as Error
+        }
       })
 
+      expect(caughtError).not.toBeNull()
+      expect(caughtError!.message).toContain('NotAllowedError')
       expect(result.current.error).toContain('NotAllowedError')
       expect(result.current.isPending).toBe(false)
     })
@@ -328,24 +336,28 @@ describe('useInvisibleWallet', () => {
       expect(sig!.signature).toBeInstanceOf(Uint8Array)
     })
 
-    it('throws when the payload is not 32 bytes', async () => {
+    it('returns null and sets an error when the payload is not 32 bytes', async () => {
       const { result } = renderHook(() => useInvisibleWallet(CONFIG))
       const badPayload = new Uint8Array(16)
 
-      await act(async () => {
-        await expect(result.current.signAuthEntry(badPayload)).rejects.toThrow('32 bytes')
-      })
+      let sig!: Awaited<ReturnType<typeof result.current.signAuthEntry>>
+      await act(async () => { sig = await result.current.signAuthEntry(badPayload) })
+
+      expect(sig).toBeNull()
+      expect(result.current.error).toContain('32 bytes')
     })
 
-    it('throws when no key ID is stored (not yet registered)', async () => {
+    it('returns null and sets an error when no key ID is stored (not yet registered)', async () => {
       localStorage.removeItem('invisible_wallet_key_id')
 
       const { result } = renderHook(() => useInvisibleWallet(CONFIG))
       const payload = new Uint8Array(32).fill(1)
 
-      await act(async () => {
-        await expect(result.current.signAuthEntry(payload)).rejects.toThrow(/No key ID/)
-      })
+      let sig!: Awaited<ReturnType<typeof result.current.signAuthEntry>>
+      await act(async () => { sig = await result.current.signAuthEntry(payload) })
+
+      expect(sig).toBeNull()
+      expect(result.current.error).toMatch(/No key ID/)
     })
   })
 

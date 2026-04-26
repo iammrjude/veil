@@ -36,6 +36,7 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "jsdom",
+    "setupFiles": ["./jest.setup.ts"],
     "testMatch": [
       "**/__tests__/**/*.test.ts"
     ],
