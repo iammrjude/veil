@@ -5,11 +5,14 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
   Horizon, Keypair, rpc as SorobanRpc, Contract, Account,
-  TransactionBuilder, BASE_FEE, Networks, Asset, nativeToScVal, scValToNative,
+  TransactionBuilder, BASE_FEE, Asset, nativeToScVal, scValToNative,
 } from '@stellar/stellar-sdk'
 const Server = Horizon.Server
 import { TxDetailSheet, type TxRecord } from '@/components/TxDetailSheet'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
+import { getNativeAssetContractId, getNetwork } from '@/lib/network'
+
+const network = getNetwork()
 
 // ── Token metadata ────────────────────────────────────────────────────────────
 const TOKEN_META: Record<string, { name: string; logo: string; color: string; bg: string }> = {
@@ -62,8 +65,6 @@ export default function TokenPage() {
   const [sparkPoints,  setSparkPoints]  = useState<number[]>([])
   const [priceChange,  setPriceChange]  = useState<number | null>(null)
 
-  const horizonUrl = 'https://horizon-testnet.stellar.org'
-
   const fetchData = useCallback(async () => {
     const signerSecret = sessionStorage.getItem('veil_signer_secret')
       ?? localStorage.getItem('veil_signer_secret')
@@ -79,7 +80,7 @@ export default function TokenPage() {
       signerPublicKey = storedPubKey
     }
     const walletAddress   = sessionStorage.getItem('invisible_wallet_address') ?? ''
-    const horizonServer   = new Server(horizonUrl)
+    const horizonServer   = new Server(network.horizonUrl)
 
     setLoading(true)
     try {
@@ -91,12 +92,12 @@ export default function TokenPage() {
 
         if (walletAddress) {
           try {
-            const rpcServer   = new SorobanRpc.Server('https://soroban-testnet.stellar.org')
-            const sacAddress  = Asset.native().contractId(Networks.TESTNET)
+            const rpcServer   = new SorobanRpc.Server(network.rpcUrl)
+            const sacAddress  = getNativeAssetContractId()
             const sacContract = new Contract(sacAddress)
             const dummyKp     = Keypair.random()
             const dummyAcct   = new Account(dummyKp.publicKey(), '0')
-            const balanceTx   = new TransactionBuilder(dummyAcct, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+            const balanceTx   = new TransactionBuilder(dummyAcct, { fee: BASE_FEE, networkPassphrase: network.networkPassphrase })
               .addOperation(sacContract.call('balance', nativeToScVal(walletAddress, { type: 'address' })))
               .setTimeout(30).build()
             const sim = await rpcServer.simulateTransaction(balanceTx)

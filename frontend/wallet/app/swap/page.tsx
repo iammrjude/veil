@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Keypair, Networks, TransactionBuilder, BASE_FEE, Operation, Asset, Memo, Horizon } from '@stellar/stellar-sdk'
+import { Keypair, TransactionBuilder, BASE_FEE, Operation, Asset, Memo, Horizon } from '@stellar/stellar-sdk'
 const Server = Horizon.Server
 import { VeilLogo } from '@/components/VeilLogo'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
+import { getNetwork } from '@/lib/network'
 import { beginTx, endTx } from '@/lib/txState'
 import { requirePasskey } from '@/lib/passkeyAuth'
+
+const network = getNetwork()
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const DEBOUNCE_MS = 500
@@ -45,8 +48,7 @@ export default function SwapPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
 
-  const horizonUrl = 'https://horizon-testnet.stellar.org'
-  const server = new Server(horizonUrl)
+  const server = new Server(network.horizonUrl)
 
   // ── Load session ──
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function SwapPage() {
         return
       }
 
-      const res = await fetch(`${horizonUrl}/accounts/${accountAddr}`)
+      const res = await fetch(`${network.horizonUrl}/accounts/${accountAddr}`)
       if (res.ok) {
         const data = await res.json()
         const assets: StellarAsset[] = data.balances.map((b: any) => ({
@@ -161,7 +163,7 @@ export default function SwapPage() {
 
       const txBuilder = new TransactionBuilder(account, {
         fee: BASE_FEE,
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: network.networkPassphrase,
       })
 
       // Auto-add trustline if needed so destination can receive the asset

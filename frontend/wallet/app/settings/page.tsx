@@ -6,12 +6,7 @@ import { Keypair } from '@stellar/stellar-sdk'
 import { VeilLogo } from '@/components/VeilLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useInvisibleWallet, type SignerInfo } from '@veil/sdk'
-
-const CONFIG = {
-  rpcUrl: 'https://soroban-testnet.stellar.org',
-  networkPassphrase: 'Test SDF Network ; September 2015',
-  factoryAddress: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? '',
-}
+import { walletConfig } from '@/lib/network'
 
 type Section = 'overview' | 'add-signer' | 'guardian'
 
@@ -28,7 +23,7 @@ export default function SettingsPage() {
   // Guardian form
   const [guardianAddress, setGuardianAddress] = useState('')
 
-  const wallet = useInvisibleWallet(CONFIG)
+  const wallet = useInvisibleWallet(walletConfig)
 
   useEffect(() => {
     const addr = sessionStorage.getItem('invisible_wallet_address')

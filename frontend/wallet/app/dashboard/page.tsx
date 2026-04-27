@@ -12,9 +12,12 @@ import { TxDetailSheet, type TxRecord } from '@/components/TxDetailSheet'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
 import { deriveStoredFeePayer } from '@/lib/deriveFeePayer'
 import { fetchPrices } from '@/lib/fetchPrice'
+import { buildFriendbotUrl, getNativeAssetContractId, getNetwork } from '@/lib/network'
 import { sweepContractBalance } from '@/lib/sweepContractBalance'
 import { derToRawSignature, hexToUint8Array } from '@veil/utils'
 import type { WebAuthnSignature } from '@veil/sdk'
+
+const network = getNetwork()
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,8 +49,6 @@ export default function DashboardPage() {
   const [sweepError, setSweepError]         = useState<string | null>(null)
   const [sweepDismissed, setSweepDismissed] = useState(false)
 
-  const isTestnet = process.env.NEXT_PUBLIC_NETWORK === 'testnet'
-
   useEffect(() => {
     const stored = sessionStorage.getItem('invisible_wallet_address')
     if (!stored) { router.replace('/lock'); return }
@@ -65,27 +66,20 @@ export default function DashboardPage() {
     if (!walletAddress) return   // keep loading=true until address is ready
     setLoading(true)
 
-    const horizonUrl = isTestnet
-      ? 'https://horizon-testnet.stellar.org'
-      : 'https://horizon.stellar.org'
-    const rpcUrl = isTestnet
-      ? 'https://soroban-testnet.stellar.org'
-      : 'https://soroban.stellar.org'
-
-    const horizonServer = new Server(horizonUrl)
-    const rpcServer     = new SorobanRpc.Server(rpcUrl)
+    const horizonServer = new Server(network.horizonUrl)
+    const rpcServer     = new SorobanRpc.Server(network.rpcUrl)
 
     // ── 1. Wallet contract (C...) XLM balance via native SAC ────────────────
     // This is the canonical on-chain balance — survives cache clears and
     // cross-device recovery because it reads directly from the ledger.
     let contractXlm = 0
     try {
-      const sacAddress  = Asset.native().contractId(Networks.TESTNET)
+      const sacAddress  = getNativeAssetContractId()
       const sacContract = new Contract(sacAddress)
       const dummyKp     = Keypair.random()
       const dummyAcct   = new Account(dummyKp.publicKey(), '0')
       const balanceTx   = new TransactionBuilder(dummyAcct, {
-        fee: BASE_FEE, networkPassphrase: Networks.TESTNET,
+        fee: BASE_FEE, networkPassphrase: network.networkPassphrase,
       })
         .addOperation(sacContract.call('balance', nativeToScVal(walletAddress, { type: 'address' })))
         .setTimeout(30)
@@ -265,7 +259,7 @@ export default function DashboardPage() {
     ])
     setTransactions(txRecords)
     setLoading(false)
-  }, [walletAddress, isTestnet])
+  }, [walletAddress])
 
   useEffect(() => {
     fetchData()
@@ -318,7 +312,16 @@ export default function DashboardPage() {
       if (currentSecret && !localStorage.getItem('veil_signer_secret')) {
         localStorage.setItem('veil_signer_secret', currentSecret)
       }
-      const res = await fetch(`https://friendbot.stellar.org/?addr=${signerPublicKey}`)
+      const friendbotUrl = buildFriendbotUrl(signerPublicKey)
+      if (!friendbotUrl) {
+        await fetchData()
+        setFundingError(
+          `Fee-payer restored. Fund ${signerPublicKey} with XLM from an external wallet to send or swap on mainnet.`
+        )
+        return
+      }
+
+      const res = await fetch(friendbotUrl)
       if (!res.ok) {
         // 400 means the account is already funded — just refresh balances
         if (res.status === 400) {
@@ -347,9 +350,6 @@ export default function DashboardPage() {
         || localStorage.getItem('veil_signer_secret')
       if (!signerSecret) throw new Error('Signing key not found. Return to dashboard and tap "Set up fee-payer".')
       const feePayerKp = Keypair.fromSecret(signerSecret)
-
-      const rpcUrl          = isTestnet ? 'https://soroban-testnet.stellar.org' : 'https://soroban.stellar.org'
-      const networkPassphrase = isTestnet ? Networks.TESTNET : Networks.PUBLIC
 
       const localSignAuthEntry = async (payload: Uint8Array): Promise<WebAuthnSignature | null> => {
         const keyId        = localStorage.getItem('invisible_wallet_key_id')
@@ -382,7 +382,13 @@ export default function DashboardPage() {
         }
       }
 
-      await sweepContractBalance(walletAddress!, feePayerKp, localSignAuthEntry, rpcUrl, networkPassphrase)
+      await sweepContractBalance(
+        walletAddress!,
+        feePayerKp,
+        localSignAuthEntry,
+        network.rpcUrl,
+        network.networkPassphrase,
+      )
       setSweepDismissed(false)
       await fetchData()
     } catch (err: unknown) {
@@ -544,7 +550,7 @@ export default function DashboardPage() {
           )}
 
           {/* Faucet button for unfunded or zero-balance testnet wallets */}
-          {isTestnet && !loading && (xlmBalance === null || xlmBalance === '0') && (
+          {network.friendbotUrl && !loading && (xlmBalance === null || xlmBalance === '0') && (
             <div style={{ marginTop: '1.25rem' }}>
               <button
                 className="btn-ghost"

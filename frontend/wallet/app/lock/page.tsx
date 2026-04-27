@@ -5,21 +5,13 @@ import { useRouter } from 'next/navigation'
 import { LockKeyhole, Fingerprint, AlertCircle } from 'lucide-react'
 import { useInvisibleWallet } from '@veil/sdk'
 import { deriveStoredFeePayer } from '@/lib/deriveFeePayer'
-
-// ── Config ────────────────────────────────────────────────────────────────────
-const FACTORY_ADDRESS    = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? ''
-const RPC_URL            = 'https://soroban-testnet.stellar.org'
-const NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015'
+import { walletConfig } from '@/lib/network'
 
 // ── Lock screen ───────────────────────────────────────────────────────────────
 export default function LockPage() {
   const router = useRouter()
 
-  const wallet = useInvisibleWallet({
-    factoryAddress:    FACTORY_ADDRESS,
-    rpcUrl:            RPC_URL,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
+  const wallet = useInvisibleWallet(walletConfig)
 
   const [error, setError]           = useState<string | null>(null)
   const [isUnlocking, setIsUnlocking] = useState(false)

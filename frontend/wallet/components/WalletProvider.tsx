@@ -3,12 +3,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { useInvisibleWallet } from '@veil/sdk'
 import { Keypair } from '@stellar/stellar-sdk'
-
-const TESTNET_CONFIG = {
-  rpcUrl: 'https://soroban-testnet.stellar.org',
-  networkPassphrase: 'Test SDF Network ; September 2015',
-  factoryAddress: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? '',
-}
+import { walletConfig } from '@/lib/network'
 
 interface WalletSession {
   address: string
@@ -27,7 +22,7 @@ const WalletContext = createContext<WalletContextValue | null>(null)
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [session, setSessionState] = useState<WalletSession | null>(null)
 
-  const wallet = useInvisibleWallet(TESTNET_CONFIG)
+  const wallet = useInvisibleWallet(walletConfig)
 
   const setSession = useCallback((s: WalletSession | null) => {
     setSessionState(s)
