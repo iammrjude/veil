@@ -2,18 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Keypair } from '@stellar/stellar-sdk'
+import { Horizon, Keypair } from '@stellar/stellar-sdk'
 import { VeilLogo } from '@/components/VeilLogo'
 import { OnboardingTutorial } from '@/components/OnboardingTutorial'
 import { useInvisibleWallet } from '@veil/sdk'
 import { deriveFeePayerKeypair } from '@/lib/deriveFeePayer'
+import { buildFriendbotUrl, getNetwork, walletConfig } from '@/lib/network'
 import { trackWalletCreated } from '@/lib/supabase'
 
-const CONFIG = {
-  rpcUrl: 'https://soroban-testnet.stellar.org',
-  networkPassphrase: 'Test SDF Network ; September 2015',
-  factoryAddress: process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? '',
-}
+const network = getNetwork()
+const HorizonServer = Horizon.Server
 
 type Step = 'landing' | 'registering' | 'deploying' | 'done'
 
@@ -42,29 +40,50 @@ export default function OnboardingPage() {
     setShowTutorial(false)
   }
 
-  const wallet = useInvisibleWallet(CONFIG)
+  const wallet = useInvisibleWallet(walletConfig)
 
   async function handleCreate() {
     setError(null)
-    setStep('registering')
     let success = false
+    let signerKeypair: Keypair | null = null
     try {
-      const result = await wallet.register()
-      if (!result) throw new Error('Registration returned no result')
+      const hasStoredPasskey =
+        !!localStorage.getItem('invisible_wallet_key_id')
+        && !!localStorage.getItem('invisible_wallet_public_key')
+
+      if (!hasStoredPasskey) {
+        setStep('registering')
+        const result = await wallet.register()
+        if (!result) throw new Error('Registration returned no result')
+      }
 
       setStep('deploying')
       // Derive fee-payer deterministically from the passkey credential ID.
       // On cache clear the same passkey → same credential ID → same keypair.
       const credentialId = localStorage.getItem('invisible_wallet_key_id')
       if (!credentialId) throw new Error('Passkey credential not found after registration')
-      const signerKeypair = await deriveFeePayerKeypair(credentialId)
-      const signerSecret  = signerKeypair.secret()
+      signerKeypair = await deriveFeePayerKeypair(credentialId)
+      const signerSecret = signerKeypair.secret()
 
-      // Fund the fee-payer keypair via Friendbot before deploying on testnet
-      const friendbotRes = await fetch(
-        `https://friendbot.stellar.org/?addr=${signerKeypair.publicKey()}`
-      )
-      if (!friendbotRes.ok) throw new Error('Friendbot funding failed — try again')
+      // Persist the signer before deploy so a failed mainnet attempt can be retried
+      // after the account is funded externally.
+      localStorage.setItem('veil_signer_public_key', signerKeypair.publicKey())
+      localStorage.setItem('veil_signer_secret', signerSecret)
+
+      const friendbotUrl = buildFriendbotUrl(signerKeypair.publicKey())
+      if (friendbotUrl) {
+        const friendbotRes = await fetch(friendbotUrl)
+        if (!friendbotRes.ok) throw new Error('Friendbot funding failed — try again')
+      } else {
+        const horizonServer = new HorizonServer(network.horizonUrl)
+        try {
+          await horizonServer.loadAccount(signerKeypair.publicKey())
+        } catch {
+          throw new Error(
+            `Mainnet deployment requires a funded signer account. Fund ${signerKeypair.publicKey()} with XLM for fees, then tap Create wallet again.`
+          )
+        }
+      }
 
       // Pass secret string so the SDK uses its own Keypair instance internally,
       // avoiding XDR type mismatches between two stellar-sdk copies.
@@ -73,10 +92,6 @@ export default function OnboardingPage() {
       // Persist minimal session to sessionStorage for the dashboard
       sessionStorage.setItem('invisible_wallet_address', deployed.walletAddress)
       sessionStorage.setItem('veil_signer_secret', signerSecret)
-      // Store fee-payer keys in localStorage so they survive lock/unlock cycles.
-      localStorage.setItem('veil_signer_public_key', signerKeypair.publicKey())
-      localStorage.setItem('veil_signer_secret', signerSecret)
-
       setAddress(deployed.walletAddress)
       setStep('done')
       success = true
@@ -84,7 +99,15 @@ export default function OnboardingPage() {
       // Track wallet creation (fire-and-forget — never blocks the flow)
       trackWalletCreated(deployed.walletAddress, signerKeypair.publicKey())
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      let msg = err instanceof Error ? err.message : String(err)
+      if (
+        !network.friendbotUrl
+        && signerKeypair
+        && !msg.includes(signerKeypair.publicKey())
+        && /account|source|balance|insufficient/i.test(msg)
+      ) {
+        msg = `Mainnet deployment requires a funded signer account. Fund ${signerKeypair.publicKey()} with XLM for fees, then tap Create wallet again.`
+      }
       setError(msg)
       setStep('landing')
     }
@@ -149,7 +172,7 @@ export default function OnboardingPage() {
             <p style={{ fontSize: '0.8125rem', color: 'rgba(246,247,248,0.4)', marginTop: '0.5rem' }}>
               {step === 'registering'
                 ? 'Approve the passkey prompt on your device'
-                : 'Broadcasting to Stellar Testnet'}
+                : `Broadcasting to ${network.displayName}`}
             </p>
           </div>
         )}

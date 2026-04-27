@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Keypair, Networks, TransactionBuilder, BASE_FEE, Asset, Operation,
+  Keypair, TransactionBuilder, BASE_FEE, Asset, Operation,
   Contract, rpc as SorobanRpc, nativeToScVal, Horizon,
 } from '@stellar/stellar-sdk'
 const Server = Horizon.Server
@@ -11,7 +11,10 @@ import { VeilLogo } from '@/components/VeilLogo'
 import { ContactPicker } from '@/components/ContactPicker'
 import { QrScanner } from '@/components/QrScanner'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
+import { getNativeAssetContractId, getNetwork } from '@/lib/network'
 import { beginTx, endTx } from '@/lib/txState'
+
+const network = getNetwork()
 
 type Step = 'form' | 'confirm' | 'signing' | 'done' | 'error'
 
@@ -53,25 +56,25 @@ export default function SendPage() {
       ? Keypair.fromSecret(sessionStorage.getItem('veil_signer_secret')!).publicKey()
       : localStorage.getItem('veil_signer_public_key') || null
     if (!signerPublicKey || !signerPublicKey.startsWith('G')) {
-      const xlm: WalletAsset = { code: 'XLM', issuer: null, contractId: Asset.native().contractId(Networks.TESTNET) }
+      const xlm: WalletAsset = { code: 'XLM', issuer: null, contractId: getNativeAssetContractId() }
       setAssets([xlm])
       setSelectedAsset(xlm)
       return
     }
-    const server = new Server('https://horizon-testnet.stellar.org')
+    const server = new Server(network.horizonUrl)
     server.loadAccount(signerPublicKey).then(account => {
       const list: WalletAsset[] = account.balances.map(b => {
         if (b.asset_type === 'native') {
-          return { code: 'XLM', issuer: null, contractId: Asset.native().contractId(Networks.TESTNET) }
+          return { code: 'XLM', issuer: null, contractId: getNativeAssetContractId() }
         }
         const issued = b as { asset_code: string; asset_issuer: string }
         const asset  = new Asset(issued.asset_code, issued.asset_issuer)
-        return { code: issued.asset_code, issuer: issued.asset_issuer, contractId: asset.contractId(Networks.TESTNET) }
+        return { code: issued.asset_code, issuer: issued.asset_issuer, contractId: asset.contractId(network.networkPassphrase) }
       })
       setAssets(list)
       if (list.length > 0) setSelectedAsset(list[0])
     }).catch(() => {
-      const xlm: WalletAsset = { code: 'XLM', issuer: null, contractId: Asset.native().contractId(Networks.TESTNET) }
+      const xlm: WalletAsset = { code: 'XLM', issuer: null, contractId: getNativeAssetContractId() }
       setAssets([xlm])
       setSelectedAsset(xlm)
     })
@@ -168,13 +171,13 @@ export default function SendPage() {
       })
       if (!assertion) throw new Error('Passkey verification was cancelled.')
 
-      const horizonServer = new Server('https://horizon-testnet.stellar.org')
+      const horizonServer = new Server(network.horizonUrl)
 
       if (recipient.startsWith('G') && recipient.length === 56) {
         const account = await horizonServer.loadAccount(feePayerKp.publicKey())
         const tx = new TransactionBuilder(account, {
           fee: BASE_FEE,
-          networkPassphrase: Networks.TESTNET,
+          networkPassphrase: network.networkPassphrase,
         })
           .addOperation(Operation.payment({
             destination: recipient,
@@ -187,14 +190,14 @@ export default function SendPage() {
         const result = await horizonServer.submitTransaction(tx)
         setTxHash(result.hash)
       } else {
-        const rpcServer     = new SorobanRpc.Server('https://soroban-testnet.stellar.org')
+        const rpcServer     = new SorobanRpc.Server(network.rpcUrl)
         const feePayerAcct  = await rpcServer.getAccount(feePayerKp.publicKey())
-        const sacContract   = new Contract(Asset.native().contractId(Networks.TESTNET))
+        const sacContract   = new Contract(getNativeAssetContractId())
         const amountStroops = BigInt(Math.round(parseFloat(amount) * 10_000_000))
 
         const tx = new TransactionBuilder(feePayerAcct, {
           fee: BASE_FEE,
-          networkPassphrase: Networks.TESTNET,
+          networkPassphrase: network.networkPassphrase,
         })
           .addOperation(sacContract.call(
             'transfer',

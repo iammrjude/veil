@@ -174,10 +174,12 @@ Set these in Vercel (or `.env.local` for local dev):
 | Variable | Description |
 |---|---|
 | `NEXT_PUBLIC_NETWORK` | `testnet` or `mainnet` |
-| `NEXT_PUBLIC_FACTORY_CONTRACT_ID` | Soroban factory contract address |
-| `NEXT_PUBLIC_HORIZON_URL` | Horizon API URL |
-| `NEXT_PUBLIC_SOROBAN_RPC_URL` | Soroban RPC URL |
-| `NEXT_PUBLIC_NETWORK_PASSPHRASE` | Stellar network passphrase |
+| `NEXT_PUBLIC_FACTORY_CONTRACT_ID_TESTNET` | Testnet factory contract address |
+| `NEXT_PUBLIC_FACTORY_CONTRACT_ID_MAINNET` | Mainnet factory contract address |
+| `NEXT_PUBLIC_FACTORY_CONTRACT_ID` | Legacy fallback for testnet-only setups |
+| `NEXT_PUBLIC_HORIZON_URL` | Optional testnet Horizon override |
+| `NEXT_PUBLIC_SOROBAN_RPC_URL` | Optional testnet Soroban RPC override |
+| `NEXT_PUBLIC_MAINNET_RPC_URL` | Mainnet Soroban RPC provider URL |
 | `NEXT_PUBLIC_WRAITH_URL` | Wraith indexer URL (transfer history) |
 | `NEXT_PUBLIC_AGENT_WS_URL` | Veil Agent WebSocket URL |
 

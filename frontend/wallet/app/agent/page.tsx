@@ -4,7 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Keypair } from '@stellar/stellar-sdk'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
+import { getNetwork } from '@/lib/network'
 import { requirePasskey } from '@/lib/passkeyAuth'
+
+const network = getNetwork()
 
 interface Message {
   role: 'user' | 'agent'
@@ -304,14 +307,10 @@ export default function AgentPage() {
       }
 
       const { Keypair, TransactionBuilder, Horizon } = await import('@stellar/stellar-sdk')
-      const horizonUrl = process.env.NEXT_PUBLIC_HORIZON_URL ?? 'https://horizon-testnet.stellar.org'
-      const networkPassphrase =
-        process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? 'Test SDF Network ; September 2015'
-
       const feePayer = Keypair.fromSecret(signerSecret)
-      const horizonServer = new Horizon.Server(horizonUrl)
+      const horizonServer = new Horizon.Server(network.horizonUrl)
 
-      const tx = TransactionBuilder.fromXDR(xdrToSubmit, networkPassphrase)
+      const tx = TransactionBuilder.fromXDR(xdrToSubmit, network.networkPassphrase)
       tx.sign(feePayer)
 
       const result = await horizonServer.submitTransaction(tx)

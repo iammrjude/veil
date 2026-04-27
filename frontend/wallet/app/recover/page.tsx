@@ -5,14 +5,13 @@ import { useRouter } from 'next/navigation'
 import { VeilLogo } from '@/components/VeilLogo'
 import { derToRawSignature, bufferToHex } from '@veil/utils'
 import { deriveFeePayerKeypair } from '@/lib/deriveFeePayer'
+import { getNetwork } from '@/lib/network'
 import {
   rpc as SorobanRpc, Contract, TransactionBuilder, BASE_FEE,
-  Account, Keypair, Networks, scValToNative,
+  Account, Keypair, scValToNative,
 } from '@stellar/stellar-sdk'
 
-const RPC_URL            = 'https://soroban-testnet.stellar.org'
-const NETWORK_PASSPHRASE = Networks.TESTNET
-const FACTORY_ADDRESS    = process.env.NEXT_PUBLIC_FACTORY_CONTRACT_ID ?? ''
+const network = getNetwork()
 
 type Step = 'idle' | 'authenticating' | 'done' | 'error'
 
@@ -33,7 +32,7 @@ export default function RecoverPage() {
     setStep('authenticating')
 
     try {
-      const server = new SorobanRpc.Server(RPC_URL)
+      const server = new SorobanRpc.Server(network.rpcUrl)
 
       // ── 1. Fetch on-chain signers ────────────────────────────────────────
       const dummyKp      = Keypair.random()
@@ -42,7 +41,7 @@ export default function RecoverPage() {
 
       const tx = new TransactionBuilder(sourceAcct, {
         fee: BASE_FEE,
-        networkPassphrase: NETWORK_PASSPHRASE,
+        networkPassphrase: network.networkPassphrase,
       })
         .addOperation(walletContract.call('get_signers'))
         .setTimeout(30)
