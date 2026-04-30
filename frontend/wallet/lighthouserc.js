@@ -2,7 +2,6 @@ module.exports = {
     ci: {
         collect: {
             url: ['http://localhost:3000'],
-            staticDistDir: './.next/standalone',
             maxWaitForLoad: 10000,
             numberOfRuns: 1,
         },
