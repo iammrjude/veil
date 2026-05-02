@@ -1,8 +1,8 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import { Core } from '@walletconnect/core'
-import { Web3Wallet } from '@walletconnect/web3wallet'
-import type { IWeb3Wallet } from '@walletconnect/web3wallet'
+import { Web3Wallet, type IWeb3Wallet } from '@walletconnect/web3wallet'
 import { getSdkError } from '@walletconnect/utils'
 import {
   Keypair,
@@ -187,7 +187,7 @@ function buildWcError(id: number, code: number, message: string) {
   return { id, jsonrpc: '2.0', error: { code, message } }
 }
 
-export async function handleSignXdrRequest(
+async function signXdrPayload(
   _topic: string,
   _requestId: number,
   xdrString: string,
@@ -265,7 +265,7 @@ async function handleSignAndSubmitXdrRequest(
   xdrString: string,
 ): Promise<string> {
   const rpc = getRpcServer()
-  const signedXDR = await handleSignXdrRequest(topic, requestId, xdrString)
+  const signedXDR = await signXdrPayload(topic, requestId, xdrString)
   const network = getNetwork()
   const signedTx = TransactionBuilder.fromXDR(signedXDR, network.networkPassphrase)
   const sendResult = await rpc.sendTransaction(signedTx)
@@ -277,9 +277,18 @@ async function handleSignAndSubmitXdrRequest(
   return sendResult.hash
 }
 
-async function handleSessionRequest(event: any): Promise<void> {
+function dispatchWalletConnectRequest(event: any): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('wc:request', { detail: event }))
+}
+
+/**
+ * Handle a session_request event dispatched by the WalletConnect client.
+ * Called by WalletConnectApprovalModal after the user approves the request.
+ */
+export async function handleSignXdrRequest(event: any): Promise<void> {
   const client = _client
-  if (!client) return
+  if (!client) throw new Error('WalletConnect client not initialized.')
 
   const topic = event.topic
   const method = event.params?.request?.method
@@ -287,9 +296,8 @@ async function handleSessionRequest(event: any): Promise<void> {
 
   try {
     if (method === 'stellar_signXDR') {
-      const requestParams = event.params?.request?.params
-      const xdrString = getRequestXdr(requestParams)
-      const signedXDR = await handleSignXdrRequest(topic, requestId, xdrString)
+      const xdrString = getRequestXdr(event.params?.request?.params)
+      const signedXDR = await signXdrPayload(topic, requestId, xdrString)
       await client.respondSessionRequest({
         topic,
         response: buildWcResult(requestId, { signedXDR }),
@@ -298,8 +306,7 @@ async function handleSessionRequest(event: any): Promise<void> {
     }
 
     if (method === 'stellar_signAndSubmitXDR') {
-      const requestParams = event.params?.request?.params
-      const xdrString = getRequestXdr(requestParams)
+      const xdrString = getRequestXdr(event.params?.request?.params)
       const txHash = await handleSignAndSubmitXdrRequest(topic, requestId, xdrString)
       await client.respondSessionRequest({
         topic,
@@ -391,8 +398,8 @@ export async function getWalletConnectClient(): Promise<IWeb3Wallet> {
     notifySessions()
   })
 
-  _client.on('session_request', async (event: any) => {
-    await handleSessionRequest(event)
+  _client.on('session_request', (event: any) => {
+    dispatchWalletConnectRequest(event)
   })
 
   await syncSessionsFromClient(_client)
@@ -451,4 +458,46 @@ export async function disconnectSession(topic: string): Promise<void> {
   _sessions = _sessions.filter((session) => session.topic !== topic)
   persistSessions(_sessions)
   notifySessions()
+}
+
+export async function disconnectAllSessions(): Promise<void> {
+  const client = _client
+  const sessions = [..._sessions]
+  await Promise.all(
+    sessions.map((s) =>
+      client
+        ? client
+            .disconnectSession({ topic: s.topic, reason: getSdkError('USER_DISCONNECTED') })
+            .catch(() => {})
+        : Promise.resolve(),
+    ),
+  )
+  _sessions = []
+  persistSessions([])
+  notifySessions()
+}
+
+// ── React hook ────────────────────────────────────────────────────────────────
+
+export function useWalletConnect() {
+  const [sessions, setSessions] = useState<WalletConnectSession[]>([])
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  useEffect(() => {
+    const unsubscribe = subscribeWalletConnectSessions((s) => {
+      setSessions(s)
+      setIsLoaded(true)
+    })
+    return unsubscribe
+  }, [])
+
+  const disconnect = useCallback((topic: string) => {
+    disconnectSession(topic).catch(console.error)
+  }, [])
+
+  const disconnectAll = useCallback(() => {
+    disconnectAllSessions().catch(console.error)
+  }, [])
+
+  return { sessions, disconnect, disconnectAll, isLoaded }
 }

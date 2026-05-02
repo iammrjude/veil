@@ -7,8 +7,98 @@ import { VeilLogo } from '@/components/VeilLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useInvisibleWallet, type SignerInfo } from '@veil/sdk'
 import { walletConfig } from '@/lib/network'
+import { useWalletConnect } from '@/lib/walletConnect'
 
 type Section = 'overview' | 'add-signer' | 'guardian'
+
+// ── Globe fallback icon ───────────────────────────────────────────────────────
+function GlobeIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="9" stroke="rgba(246,247,248,0.3)" strokeWidth="1.5" />
+      <ellipse cx="12" cy="12" rx="4" ry="9" stroke="rgba(246,247,248,0.3)" strokeWidth="1.5" />
+      <path d="M3 12h18" stroke="rgba(246,247,248,0.3)" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+// ── Connected Apps section ────────────────────────────────────────────────────
+function ConnectedApps() {
+  const { sessions, disconnect, disconnectAll, isLoaded } = useWalletConnect()
+
+  if (!isLoaded) return null
+
+  return (
+    <div style={{ marginTop: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.625rem' }}>
+        <p style={{ fontSize: '0.75rem', color: 'rgba(246,247,248,0.4)', fontFamily: 'Anton, Impact, sans-serif', letterSpacing: '0.06em' }}>
+          CONNECTED APPS
+        </p>
+        {sessions.length > 1 && (
+          <button
+            onClick={disconnectAll}
+            style={{ background: 'none', border: 'none', fontSize: '0.75rem', color: 'rgba(246,247,248,0.4)', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+          >
+            Disconnect all
+          </button>
+        )}
+      </div>
+
+      {sessions.length === 0 && (
+        <div className="card-md" style={{ textAlign: 'center', padding: '1.5rem' }}>
+          <p style={{ fontSize: '0.875rem', color: 'rgba(246,247,248,0.3)' }}>No apps connected</p>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+        {sessions.map((session) => {
+          const peer = session.peer
+          const iconSrc = peer?.icons && peer.icons.length > 0 ? peer.icons[0] : null
+          const url = peer?.url ?? ''
+          const truncatedUrl = url.length > 40 ? url.slice(0, 37) + '…' : url
+
+          return (
+            <div
+              key={session.topic}
+              className="card-md"
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', minWidth: 0 }}>
+                {iconSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={iconSrc}
+                    alt={peer?.name ?? 'dApp'}
+                    width={24}
+                    height={24}
+                    style={{ borderRadius: '6px', flexShrink: 0, objectFit: 'cover' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                ) : (
+                  <GlobeIcon />
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--off-white)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {peer?.name ?? 'Unknown app'}
+                  </p>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(246,247,248,0.35)', fontFamily: 'Inconsolata, monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {truncatedUrl}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => disconnect(session.topic)}
+                style={{ background: 'none', border: 'none', fontSize: '0.75rem', color: 'var(--teal)', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0, padding: 0 }}
+              >
+                Disconnect
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -283,6 +373,9 @@ export default function SettingsPage() {
                   })}
                 </div>
               </div>
+
+              {/* ── Connected Apps ── */}
+              <ConnectedApps />
             </div>
           </>
         )}

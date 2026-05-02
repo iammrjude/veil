@@ -9,6 +9,7 @@ import {
 } from '@stellar/stellar-sdk'
 const Server = Horizon.Server
 import { ConnectDAppModal } from '@/components/ConnectDAppModal'
+import { WalletConnectApprovalModal } from '@/components/WalletConnectApprovalModal'
 import { TxDetailSheet, type TxRecord } from '@/components/TxDetailSheet'
 import { useInactivityLock } from '@/hooks/useInactivityLock'
 import { deriveStoredFeePayer } from '@/lib/deriveFeePayer'
@@ -856,6 +857,8 @@ export default function DashboardPage() {
           {connectToast}
         </div>
       )}
+
+      <WalletConnectApprovalModal />
     </div>
   )
 }

@@ -76,7 +76,7 @@ export default function BuyPage() {
   const [transferServerUrl, setTransferServerUrl] = useState<string | null>(null)
   const [error, setError]                         = useState<string | null>(null)
 
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const stored = sessionStorage.getItem('invisible_wallet_address')
