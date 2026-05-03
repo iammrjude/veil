@@ -584,7 +584,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Action Row ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.75rem', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.5rem', marginBottom: '2.5rem' }}>
           <ActionButton
             label="Send"
             onClick={() => router.push('/send')}
@@ -893,8 +893,8 @@ function ActionButton({ label, onClick, icon, badge }: { label: string; onClick:
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '0.625rem',
-        padding: '1.25rem 0.5rem',
+        gap: '0.5rem',
+        padding: '1rem 0.25rem',
         cursor: 'pointer',
         background: 'var(--surface)',
         transition: 'all 0.2s ease',

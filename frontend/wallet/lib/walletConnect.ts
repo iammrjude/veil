@@ -8,8 +8,13 @@ import {
   Keypair,
   TransactionBuilder,
   nativeToScVal,
+  scValToNative,
   rpc as SorobanRpc,
   xdr,
+  Contract,
+  Account,
+  BASE_FEE,
+  Address,
 } from '@stellar/stellar-sdk'
 import type { WebAuthnSignature } from '@veil/sdk'
 import { derToRawSignature, hexToUint8Array } from '@veil/utils'
@@ -218,6 +223,25 @@ async function signXdrPayload(
       }
 
       const addrCred = cred.address()
+
+      const contractAddr = Address.fromScAddress(addrCred.address()).toString()
+      const dummyKp = Keypair.random()
+      const dummyAcct = new Account(dummyKp.publicKey(), '0')
+      const nonceTx = new TransactionBuilder(dummyAcct, {
+        fee: BASE_FEE,
+        networkPassphrase: network.networkPassphrase,
+      })
+        .addOperation(new Contract(contractAddr).call('get_nonce'))
+        .setTimeout(30)
+        .build()
+      const nonceSim = await rpc.simulateTransaction(nonceTx)
+      if (SorobanRpc.Api.isSimulationError(nonceSim)) {
+        throw new Error(`Nonce fetch failed: ${nonceSim.error}`)
+      }
+      const nonceSimResult = (nonceSim as SorobanRpc.Api.SimulateTransactionSuccessResponse).result
+      if (!nonceSimResult) throw new Error('No nonce result from simulation')
+      const currentNonce = scValToNative(nonceSimResult.retval) as bigint
+
       const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
         new xdr.HashIdPreimageSorobanAuthorization({
           networkId: Buffer.from(networkIdBytes),
@@ -240,6 +264,7 @@ async function signXdrPayload(
         nativeToScVal(webAuthnSig.authData, { type: 'bytes' }),
         nativeToScVal(webAuthnSig.clientDataJSON, { type: 'bytes' }),
         nativeToScVal(webAuthnSig.signature, { type: 'bytes' }),
+        nativeToScVal(currentNonce, { type: 'u64' }),
       ])
 
       parsed.credentials(

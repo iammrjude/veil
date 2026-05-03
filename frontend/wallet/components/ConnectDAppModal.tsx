@@ -191,6 +191,7 @@ export function ConnectDAppModal({ isOpen, onClose, onConnected }: ConnectDAppMo
           borderBottomRightRadius: 0,
           maxHeight: '85dvh',
           overflowY: 'auto',
+          background: '#141414',
         }}
         onClick={(event) => event.stopPropagation()}
       >

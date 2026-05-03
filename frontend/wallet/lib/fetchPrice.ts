@@ -21,6 +21,7 @@ export async function fetchPrice(
   code:   string,
   issuer: string | null | undefined,
 ): Promise<number | null> {
+  if (code.toUpperCase() === 'USDC') return 1.0
   const assetA = assetParam(code, issuer)
   // Quote everything in USDC (testnet USDC issuer)
   const assetB = 'USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
