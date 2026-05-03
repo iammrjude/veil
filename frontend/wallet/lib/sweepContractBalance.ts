@@ -177,8 +177,13 @@ export async function sweepContractBalance(
     .setTimeout(30)
     .build()
 
-  // 3. Simulate to discover auth entries and resource footprint
-  const sim = await rpc.simulateTransaction(tx)
+  // 3. Simulate to discover auth entries and resource footprint.
+  //    Add cpuInstructions leeway because Soroban's `recording` auth mode
+  //    does NOT actually execute __check_auth during simulation — it just
+  //    records the auth requirement. The contract uses the wasm-compiled
+  //    p256 crate for ECDSA verification (~50M instructions), which won't
+  //    fit in the simulator's estimated budget without leeway.
+  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 50_000_000 } as any)
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`Simulation failed: ${sim.error}`)
   }

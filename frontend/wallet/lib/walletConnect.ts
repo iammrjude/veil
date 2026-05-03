@@ -227,7 +227,9 @@ async function signXdrPayload(
   const feePayerKeypair = getFeePayerKeypair()
   const tx = TransactionBuilder.fromXDR(xdrString, network.networkPassphrase)
 
-  const sim = await rpc.simulateTransaction(tx)
+  // Add CPU leeway to cover wasm-compiled P-256 verification in __check_auth
+  // (Soroban's recording auth mode under-estimates because it doesn't run __check_auth).
+  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 50_000_000 } as any)
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`Simulation failed: ${sim.error}`)
   }
