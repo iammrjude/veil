@@ -38,10 +38,11 @@ impl Factory {
         // Step 2: validate public key
         validation::validate_public_key(&public_key)?;
 
-        // Step 3: compute salt = SHA-256(public_key_bytes)
-        let key_bytes = public_key.to_array();
-        let salt_bytes = sha2_hash(&key_bytes);
-        let salt = BytesN::from_array(&env, &salt_bytes);
+        // Step 3: compute salt = SHA-256(public_key_bytes) via host function.
+        // Deterministic — same as the prior `sha2` crate output for the same
+        // input, so wallet addresses for a given public key are unchanged.
+        let pk_bytes = soroban_sdk::Bytes::from_array(&env, &public_key.to_array());
+        let salt = env.crypto().sha256(&pk_bytes).into();
 
         // Step 4: check for duplicate
         if storage::is_deployed(&env, &salt) {
@@ -66,6 +67,9 @@ impl Factory {
 }
 
 /// Compute SHA-256 of a 65-byte input, returning a 32-byte array.
+/// Test-only helper used to verify deploy()'s salt against the expected hash.
+/// Production code uses `env.crypto().sha256()` (deterministic, same output).
+#[cfg(test)]
 fn sha2_hash(input: &[u8; 65]) -> [u8; 32] {
     use sha2::{Sha256, Digest};
     let mut hasher = Sha256::new();

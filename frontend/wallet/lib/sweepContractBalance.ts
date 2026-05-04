@@ -1,37 +1,9 @@
 import {
   Keypair, rpc as SorobanRpc, Contract, Account,
   TransactionBuilder, BASE_FEE, Asset, nativeToScVal, scValToNative, xdr,
-  Address, SorobanDataBuilder,
+  Address,
 } from '@stellar/stellar-sdk'
 import type { WebAuthnSignature } from '@veil/sdk'
-
-/**
- * Bumps the simulation's recommended CPU/fee budget so that wasm-compiled
- * P-256 verification in __check_auth doesn't trap with OutOfFuel at runtime.
- * Soroban's `recording` auth mode skips __check_auth during simulation, so
- * the returned `transactionData.resources.instructions` reflects only the
- * outer operation cost — way below what verify_prehash actually needs.
- *
- * Mutates the simulation in-place so subsequent assembleTransaction picks up
- * the bumped budget.
- */
-function bumpSimulationBudget(sim: SorobanRpc.Api.SimulateTransactionSuccessResponse): void {
-  try {
-    const built = sim.transactionData.build()
-    const resources: any = built.resources()
-    const bumped = new SorobanDataBuilder(built.toXDR())
-      .setResources(
-        100_000_000,            // cpuInstructions — protocol max for testnet
-        resources.diskReadBytes(),
-        resources.writeBytes(),
-      )
-      .setResourceFee(BigInt(built.resourceFee().toString()) * 10n)
-    ;(sim as any).transactionData = bumped
-    ;(sim as any).minResourceFee = (BigInt(sim.minResourceFee) * 10n).toString()
-  } catch (err) {
-    console.warn('[sweep] could not bump simulation budget:', err)
-  }
-}
 
 /**
  * Reads the wallet contract's stored nonce from instance storage.
@@ -205,17 +177,13 @@ export async function sweepContractBalance(
     .setTimeout(30)
     .build()
 
-  // 3. Simulate to discover auth entries and resource footprint.
-  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 50_000_000 } as any)
+  // 3. Simulate to discover auth entries and resource footprint. Small CPU
+  //    leeway covers the host-function ECDSA verification (~10k instructions)
+  //    that recording-mode simulation doesn't account for.
+  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 5_000_000 } as any)
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`Simulation failed: ${sim.error}`)
   }
-
-  // 3a. Bump the simulation's CPU/fee budget. The `recording` auth mode used
-  //     by simulation skips __check_auth, so the returned instructions field
-  //     doesn't include the wasm-p256 verification cost (~50M instructions).
-  //     Without this bump, runtime trap with OutOfFuel inside __check_auth.
-  bumpSimulationBudget(sim as SorobanRpc.Api.SimulateTransactionSuccessResponse)
 
   // 4. Sign Soroban auth entries BEFORE assembly so assembleTransaction picks
   //    up the signed credentials when it reads sim.result.auth.

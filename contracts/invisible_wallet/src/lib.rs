@@ -234,7 +234,7 @@ impl InvisibleWallet {
 
         // Step 4 — RP ID binding.
         let rp_id = storage::get_rp_id(&env).ok_or(WalletError::RpIdMismatch)?;
-        auth::verify_rp_id(&rp_id, &auth_data)?;
+        auth::verify_rp_id(&env, &rp_id, &auth_data)?;
 
         // Step 5 — Origin binding.
         let origin = storage::get_origin(&env).ok_or(WalletError::OriginMismatch)?;
@@ -735,7 +735,7 @@ mod test {
             b
         };
 
-        let result = auth::verify_rp_id(&stored_rp_id, &auth_data_bytes);
+        let result = auth::verify_rp_id(&env, &stored_rp_id, &auth_data_bytes);
         assert_eq!(result, Err(WalletError::RpIdMismatch));
     }
 
@@ -771,7 +771,7 @@ mod test {
             b
         };
 
-        let result = auth::verify_rp_id(&stored_rp_id, &auth_data_bytes);
+        let result = auth::verify_rp_id(&env, &stored_rp_id, &auth_data_bytes);
         assert!(result.is_ok());
     }
 

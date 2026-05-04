@@ -74,7 +74,7 @@ jobs:
         # gitguardian:ignore=true — public testnet values (NEXT_PUBLIC_* are browser-exposed)
         env:
           NEXT_PUBLIC_NETWORK: testnet
-          NEXT_PUBLIC_FACTORY_CONTRACT_ID: CAGFEJM4FBYZMMZ364MINCEZO6MT7U7VMJSXQLR6UDYT7ICDLJUXWJIR
+          NEXT_PUBLIC_FACTORY_CONTRACT_ID: CAUK4MWO3TTFM6PLURSH2GPK3AB747SZGABKTCVLKCU7W2MGKHKP35GA
           NEXT_PUBLIC_HORIZON_URL: https://horizon-testnet.stellar.org
           NEXT_PUBLIC_SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
           NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
@@ -115,7 +115,7 @@ jobs:
         # gitguardian:ignore=true — public testnet values (NEXT_PUBLIC_* are browser-exposed)
         env:
           NEXT_PUBLIC_NETWORK: testnet
-          NEXT_PUBLIC_FACTORY_CONTRACT_ID: CAGFEJM4FBYZMMZ364MINCEZO6MT7U7VMJSXQLR6UDYT7ICDLJUXWJIR
+          NEXT_PUBLIC_FACTORY_CONTRACT_ID: CAUK4MWO3TTFM6PLURSH2GPK3AB747SZGABKTCVLKCU7W2MGKHKP35GA
           NEXT_PUBLIC_HORIZON_URL: https://horizon-testnet.stellar.org
           NEXT_PUBLIC_SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
           NEXT_PUBLIC_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"

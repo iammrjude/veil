@@ -15,26 +15,7 @@ import {
   Account,
   Contract,
   BASE_FEE,
-  SorobanDataBuilder,
 } from '@stellar/stellar-sdk'
-
-function bumpSimulationBudget(sim: SorobanRpc.Api.SimulateTransactionSuccessResponse): void {
-  try {
-    const built = sim.transactionData.build()
-    const resources: any = built.resources()
-    const bumped = new SorobanDataBuilder(built.toXDR())
-      .setResources(
-        100_000_000,
-        resources.diskReadBytes(),
-        resources.writeBytes(),
-      )
-      .setResourceFee(BigInt(built.resourceFee().toString()) * 10n)
-    ;(sim as any).transactionData = bumped
-    ;(sim as any).minResourceFee = (BigInt(sim.minResourceFee) * 10n).toString()
-  } catch (err) {
-    console.warn('[wc] could not bump simulation budget:', err)
-  }
-}
 
 async function getWalletNonce(
   rpc: SorobanRpc.Server,
@@ -246,13 +227,12 @@ async function signXdrPayload(
   const feePayerKeypair = getFeePayerKeypair()
   const tx = TransactionBuilder.fromXDR(xdrString, network.networkPassphrase)
 
-  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 50_000_000 } as any)
+  // Small CPU leeway for host-function ECDSA verification not modeled by
+  // recording-mode simulation.
+  const sim = await rpc.simulateTransaction(tx, { cpuInstructions: 5_000_000 } as any)
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`Simulation failed: ${sim.error}`)
   }
-  // Bump CPU budget — recording-mode simulation under-estimates because it
-  // doesn't run __check_auth. Without this, wasm-p256 verify traps OutOfFuel.
-  bumpSimulationBudget(sim as SorobanRpc.Api.SimulateTransactionSuccessResponse)
 
   // Sign auth entries BEFORE assembly — assembleTransaction reads sim.result.auth
   // at call time, so signing after would leave unsigned credentials in the tx.

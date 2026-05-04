@@ -1,6 +1,4 @@
 use soroban_sdk::{contracttype, Bytes, BytesN, Env};
-use p256::ecdsa::{VerifyingKey, Signature, signature::hazmat::PrehashVerifier};
-use sha2::{Sha256, Digest};
 use crate::WalletError;
 
 #[contracttype]
@@ -72,21 +70,15 @@ fn challenge_is_present(client_data_json: &Bytes, signature_payload: &[u8; 32]) 
 /// cannot be replayed from a different origin.
 ///
 /// Called from `__check_auth` after signature verification.
-pub fn verify_rp_id(rp_id: &Bytes, auth_data: &Bytes) -> Result<(), WalletError> {
+pub fn verify_rp_id(env: &Env, rp_id: &Bytes, auth_data: &Bytes) -> Result<(), WalletError> {
     // auth_data must be at least 37 bytes (rpIdHash + flags + signCount).
     // We only need the first 32 here.
     if auth_data.len() < 32 {
         return Err(WalletError::RpIdMismatch);
     }
 
-    // Compute SHA-256(rp_id)
-    let expected: [u8; 32] = {
-        let mut h = Sha256::new();
-        for i in 0..rp_id.len() {
-            h.update([rp_id.get_unchecked(i)]);
-        }
-        h.finalize().into()
-    };
+    // Compute SHA-256(rp_id) via the Soroban host function (cheap, ~few hundred CPU).
+    let expected = env.crypto().sha256(rp_id).to_array();
 
     // Compare byte-by-byte against auth_data[0..32]
     for i in 0..32u32 {
@@ -182,7 +174,7 @@ pub fn verify_origin(
 /// Domain binding (rpIdHash and origin) is verified separately in `__check_auth`
 /// after this function returns, to avoid leaking timing information on failure.
 pub fn verify_webauthn(
-    _env: &Env,
+    env: &Env,
     signature_payload: &BytesN<32>,
     public_key: BytesN<65>,
     auth_data: Bytes,
@@ -194,35 +186,22 @@ pub fn verify_webauthn(
         return Err(WalletError::InvalidChallenge);
     }
 
-    // 2. SHA256(clientDataJSON)
-    let client_data_hash: [u8; 32] = {
-        let mut h = Sha256::new();
-        for i in 0..client_data_json.len() {
-            h.update([client_data_json.get_unchecked(i)]);
-        }
-        h.finalize().into()
-    };
+    // 2. SHA256(clientDataJSON) via host function
+    let client_data_hash = env.crypto().sha256(&client_data_json);
 
-    // 3. SHA256(authData || SHA256(clientDataJSON))
-    //    This is exactly what the WebAuthn authenticator signed under ES256.
-    let message_hash: [u8; 32] = {
-        let mut h = Sha256::new();
-        for i in 0..auth_data.len() {
-            h.update([auth_data.get_unchecked(i)]);
-        }
-        h.update(client_data_hash);
-        h.finalize().into()
-    };
+    // 3. SHA256(authData || SHA256(clientDataJSON)) — exactly what the
+    //    WebAuthn authenticator signed under ES256.
+    let mut signed_data = Bytes::new(env);
+    signed_data.append(&auth_data);
+    signed_data.extend_from_array(&client_data_hash.to_array());
+    let message_hash = env.crypto().sha256(&signed_data);
 
-    // 4. Verify P-256 ECDSA signature over the message hash
-    let pk_bytes: [u8; 65] = public_key.to_array();
-    let verifying_key = VerifyingKey::from_sec1_bytes(&pk_bytes)
-        .map_err(|_| WalletError::InvalidPublicKey)?;
+    // 4. Verify P-256 ECDSA signature using the secp256r1 host function.
+    //    This costs a few thousand CPU instructions vs ~100M for the wasm
+    //    p256 crate. The host function panics on verification failure;
+    //    that surfaces as a HostError in diagnostics, distinguishable
+    //    from our explicit WalletError variants by the trap kind.
+    env.crypto().secp256r1_verify(&public_key, &message_hash, &signature);
 
-    let sig_bytes: [u8; 64] = signature.to_array();
-    let sig_obj = Signature::from_bytes(&sig_bytes.into())
-        .map_err(|_| WalletError::InvalidSignature)?;
-
-    verifying_key.verify_prehash(&message_hash, &sig_obj)
-        .map_err(|_| WalletError::SignatureVerificationFailed)
+    Ok(())
 }
