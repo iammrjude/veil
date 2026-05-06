@@ -9,8 +9,8 @@ import { Callout } from 'nextra/components'
 
 The `invisible-wallet-sdk` is a TypeScript package providing a React hook and utility functions for integrating Veil into web applications.
 
-**Package:** `invisible-wallet-sdk`  
-**Source:** `sdk/src/`  
+**Package:** `invisible-wallet-sdk`
+**Source:** `sdk/src/`
 **Entry:** `dist/index.js` / `dist/index.d.ts`
 
 ---
@@ -19,3 +19,362 @@ The `invisible-wallet-sdk` is a TypeScript package providing a React hook and ut
 
 ```bash
 npm install invisible-wallet-sdk @stellar/stellar-sdk
+```
+
+---
+
+## Quick Start
+
+```typescript
+import { useInvisibleWallet } from 'invisible-wallet-sdk'
+
+const config = {
+  factoryAddress: 'CABC...', // Your deployed factory contract
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+}
+
+function App() {
+  const wallet = useInvisibleWallet(config)
+
+  const handleCreate = async () => {
+    // 1. Create passkey + compute wallet address
+    const { walletAddress, publicKeyBytes } = await wallet.register('alice')
+
+    // 2. Deploy wallet contract on-chain
+    const signerKeypair = Keypair.fromSecret('S...')
+    await wallet.deploy(signerKeypair, publicKeyBytes)
+  }
+
+  return <button onClick={handleCreate}>Create Wallet</button>
+}
+```
+
+---
+
+## `WalletConfig`
+
+Configuration object passed to `useInvisibleWallet`.
+
+```typescript
+type WalletConfig = {
+  factoryAddress: string      // Factory contract address (C...)
+  rpcUrl: string              // Soroban RPC endpoint
+  networkPassphrase: string   // e.g. Networks.TESTNET
+  rpId?: string               // WebAuthn relying party ID (default: window.location.hostname)
+  origin?: string             // WebAuthn origin (default: window.location.origin)
+}
+```
+
+---
+
+## `useInvisibleWallet(config)`
+
+The primary React hook. Returns an `InvisibleWallet` object with state and methods.
+
+```typescript
+const wallet = useInvisibleWallet(config)
+```
+
+### State
+
+| Property | Type | Description |
+|---|---|---|
+| `address` | `string \| null` | Wallet contract address, null if not registered |
+| `isDeployed` | `boolean` | Whether the contract exists on-chain |
+| `isPending` | `boolean` | True while any async operation is running |
+| `error` | `string \| null` | Last error message |
+
+---
+
+## Methods
+
+### `register(username?)`
+
+Creates a new passkey credential and computes the deterministic wallet address.
+
+```typescript
+const { walletAddress, publicKeyBytes } = await wallet.register('alice')
+```
+
+**Parameters**
+
+| Name | Type | Description |
+|---|---|---|
+| `username` | `string` (optional) | Display name for the passkey credential |
+
+**Returns** `RegisterResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `walletAddress` | `string` | Deterministic contract address (C...) |
+| `publicKeyBytes` | `Uint8Array` | 65-byte uncompressed P-256 public key |
+
+**Flow:**
+1. Calls `navigator.credentials.create()` with `alg: -7` (ES256/P-256)
+2. Extracts the 65-byte uncompressed public key
+3. Computes the deterministic wallet address from the factory
+4. Stores `wallet_address`, `key_id`, and `public_key` in `localStorage`
+
+<Callout type="info">
+The challenge used during registration is a random 32-byte nonce — it is **not** a Soroban payload. Only `signAuthEntry` uses the actual payload as the challenge.
+</Callout>
+
+---
+
+### `deploy(signerKeypair, publicKeyBytes?)`
+
+Deploys the wallet contract on-chain via the factory. If already deployed, returns the existing address.
+
+```typescript
+const { walletAddress, alreadyDeployed } = await wallet.deploy(keypair)
+```
+
+**Parameters**
+
+| Name | Type | Description |
+|---|---|---|
+| `signerKeypair` | `Keypair \| string` | Fee-payer keypair (pays transaction fees only) |
+| `publicKeyBytes` | `Uint8Array` (optional) | P-256 public key override. Defaults to localStorage value |
+
+**Returns** `DeployResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `walletAddress` | `string` | Deployed contract address |
+| `alreadyDeployed` | `boolean` | True if contract existed before this call |
+
+---
+
+### `login()`
+
+Restores a wallet session from `localStorage`. Verifies the contract exists on-chain.
+
+```typescript
+const result = await wallet.login()
+if (result) {
+  console.log('Restored:', result.walletAddress)
+}
+```
+
+**Returns** `{ walletAddress: string } | null`
+
+---
+
+### `signAuthEntry(signaturePayload)`
+
+Signs a Soroban authorization entry using the device biometric.
+
+```typescript
+const sig = await wallet.signAuthEntry(payload)
+```
+
+**Parameters**
+
+| Name | Type | Description |
+|---|---|---|
+| `signaturePayload` | `Uint8Array` | 32-byte Soroban `HashIdPreimage` |
+
+**Returns** `WebAuthnSignature | null` — null if the user cancels.
+
+**Encoding for `__check_auth`:**
+```typescript
+const sigVec = [
+  xdr.ScVal.scvBytes(sig.publicKey),
+  xdr.ScVal.scvBytes(sig.authData),
+  xdr.ScVal.scvBytes(sig.clientDataJSON),
+  xdr.ScVal.scvBytes(sig.signature),
+]
+```
+
+---
+
+### `getNonce()`
+
+Read the wallet's current nonce via simulation (no transaction submitted).
+
+```typescript
+const nonce: bigint = await wallet.getNonce()
+```
+
+---
+
+### `addSigner(signerKeypair, newPublicKeyBytes)`
+
+Register an additional P-256 public key as a valid signer.
+
+```typescript
+const { signerIndex } = await wallet.addSigner(keypair, newPubKeyBytes)
+```
+
+**Parameters**
+
+| Name | Type | Description |
+|---|---|---|
+| `signerKeypair` | `Keypair` | Fee-payer keypair |
+| `newPublicKeyBytes` | `Uint8Array` | 65-byte uncompressed P-256 public key |
+
+**Returns** `AddSignerResult` with `signerIndex`.
+
+---
+
+### `removeSigner(signerKeypair, signerIndex)`
+
+Remove a signer by index.
+
+```typescript
+await wallet.removeSigner(keypair, 1)
+```
+
+<Callout type="warning">
+Do not remove the last signer — this will lock the contract permanently unless a guardian is configured.
+</Callout>
+
+---
+
+### `getSigners()`
+
+Fetch all registered signers from the wallet contract.
+
+```typescript
+const signers: SignerInfo[] = await wallet.getSigners()
+signers.forEach(s => console.log(`#${s.index}: ${s.publicKey}`))
+```
+
+**Returns** `SignerInfo[]`
+
+| Field | Type | Description |
+|---|---|---|
+| `index` | `number` | Signer index in the contract |
+| `publicKey` | `string` | Hex-encoded P-256 public key |
+
+---
+
+### `setGuardian(signerKeypair, guardianAddress)`
+
+Set a guardian address for account recovery. Requires WebAuthn authentication.
+
+```typescript
+await wallet.setGuardian(keypair, 'G...')
+```
+
+---
+
+### `initiateRecovery(guardianKeypair, newPublicKeyBytes)`
+
+Start guardian-based key recovery. Initiates a timelock after which the new key replaces the existing signer.
+
+```typescript
+const { unlockTime } = await wallet.initiateRecovery(guardianKp, newPubKey)
+// unlockTime is a Unix timestamp — recovery completes after this time
+```
+
+**Throws:**
+- `NoGuardianSet` — no guardian configured on the wallet
+
+---
+
+### `completeRecovery(payerKeypair)`
+
+Complete a pending recovery after the timelock expires.
+
+```typescript
+await wallet.completeRecovery(payerKeypair)
+```
+
+**Throws:**
+- `RecoveryTimelockActive` — timelock hasn't expired yet
+- `RecoveryNotPending` — no recovery in progress
+
+---
+
+## Types
+
+### `WebAuthnSignature`
+
+```typescript
+interface WebAuthnSignature {
+  publicKey:      Uint8Array  // 65 bytes: 0x04 || x (32B) || y (32B)
+  authData:       Uint8Array  // WebAuthn authenticatorData
+  clientDataJSON: Uint8Array  // UTF-8 JSON containing base64url(challenge)
+  signature:      Uint8Array  // 64 bytes: r (32B) || s (32B)
+}
+```
+
+### Error Classes
+
+| Class | When thrown |
+|---|---|
+| `RecoveryTimelockActive` | `completeRecovery()` called before timelock expires |
+| `NoGuardianSet` | Recovery methods called with no guardian configured |
+| `RecoveryNotPending` | `completeRecovery()` called with no active recovery |
+
+---
+
+## Utility Functions
+
+### `computeWalletAddress(factoryId, publicKeyBytes, networkPassphrase?)`
+
+Compute the deterministic wallet contract address from a factory address and public key.
+
+```typescript
+import { computeWalletAddress } from 'invisible-wallet-sdk'
+
+const addr = computeWalletAddress('CFACTORY...', pubkeyBytes)
+```
+
+### `derToRawSignature(derSig: ArrayBuffer): Uint8Array`
+
+Convert a WebAuthn DER-encoded P-256 signature to raw 64-byte `r || s` format.
+
+```typescript
+const raw = derToRawSignature(assertion.response.signature)
+```
+
+### `extractP256PublicKey(response): Promise<Uint8Array>`
+
+Extract the 65-byte uncompressed P-256 public key from a WebAuthn attestation response.
+
+```typescript
+const pubkey = await extractP256PublicKey(credential.response)
+```
+
+### `sha256(data: Uint8Array): Promise<Uint8Array>`
+
+SHA-256 hash using Web Crypto API.
+
+### `computeWebAuthnMessageHash(authData, clientDataJSON): Promise<Uint8Array>`
+
+Compute `SHA256(authData || SHA256(clientDataJSON))` — the message hash the authenticator signs.
+
+### `parseAuthData(authData: ArrayBuffer)`
+
+Parse the binary `authenticatorData` structure.
+
+```typescript
+const { rpIdHash, flags, signCount } = parseAuthData(authData)
+```
+
+### `parseClientDataJSON(clientDataJSON: ArrayBuffer)`
+
+Decode `clientDataJSON` to a typed object.
+
+```typescript
+const { type, challenge, origin } = parseClientDataJSON(clientDataJSON)
+```
+
+### `bufferToHex(input): string`
+
+Convert bytes to hex string.
+
+### `hexToUint8Array(hex): Uint8Array`
+
+Convert hex string to bytes.
+
+### `base64UrlEncode(bytes): string`
+
+Base64url encoding without padding.
+
+### `encodeU64(num: bigint): Uint8Array`
+
+Encode a `bigint` as 8-byte big-endian buffer for XDR `u64` fields.

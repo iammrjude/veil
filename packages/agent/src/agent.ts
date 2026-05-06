@@ -277,7 +277,7 @@ export async function runAgent(
           .then((r) => r.json()),
       ]);
 
-      const sorobanTransfers = wraithResult.status === 'fulfilled' ? wraithResult.value : [];
+      const sorobanTransfers: any[] = wraithResult.status === 'fulfilled' ? (wraithResult.value as any[]) ?? [] : [];
       const classicPayments = horizonResult.status === 'fulfilled'
         ? (horizonResult.value as any)?._embedded?.records ?? []
         : [];
@@ -452,21 +452,21 @@ export interface VeilAgent {
  * import { createVeilAgent } from '@veil/agent'
  *
  * const agent = createVeilAgent({
- * anthropicApiKey: 'sk-ant-...',
- * agentKeypairSecret: 'S...',
- * oracleUrl: '[https://oracle.example.com](https://oracle.example.com)',
- * wraithUrl: '[https://wraith.example.com](https://wraith.example.com)',
+ *   anthropicApiKey: 'sk-ant-...',
+ *   agentKeypairSecret: 'S...',
+ *   oracleUrl: 'https://oracle.example.com',
+ *   wraithUrl: 'https://wraith.example.com',
  * })
  *
  * const result = await agent.chat('What is my balance?', {
- * walletAddress: 'C...',
- * feePayerAddress: 'G...',
- * profile: { name: 'Alice', role: 'trader' },
+ *   walletAddress: 'C...',
+ *   feePayerAddress: 'G...',
+ *   profile: { name: 'Alice', role: 'trader' },
  * })
  *
  * console.log(result.response)
  * if (result.pendingTxXdr) {
- * // Present to user for passkey approval, then sign + submit
+ *   // Present to user for passkey approval, then sign + submit
  * }
  * ```
  */
