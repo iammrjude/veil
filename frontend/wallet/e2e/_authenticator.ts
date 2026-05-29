@@ -16,9 +16,9 @@ export interface VirtualAuthenticator {
 export interface WebAuthnCredential {
   credentialId: string;
   isResidentCredential: boolean;
-  rpId: string;
+  rpId?: string;
   privateKey: string;
-  userHandle: string;
+  userHandle?: string;
   signCount: number;
   largeBlob?: string;
 }

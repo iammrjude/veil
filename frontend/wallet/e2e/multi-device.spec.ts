@@ -247,7 +247,7 @@ test.describe('Multi-Device: Cross-Device Passkey Sync', () => {
       // In a real scenario, the app would derive this from the passkey
       await pageB.evaluate((address) => {
         localStorage.setItem('invisible_wallet_address', address);
-      }, walletAddressA);
+      }, walletAddressA!);
       
       // Navigate to dashboard
       await pageB.goto('/dashboard');
@@ -322,7 +322,7 @@ test.describe('Multi-Device: Cross-Device Passkey Sync', () => {
       await pageB.goto('/');
       await pageB.evaluate((pubKey) => {
         localStorage.setItem('invisible_wallet_public_key', pubKey);
-      }, publicKeyA);
+      }, publicKeyA!);
       
       // The key point: same public key → same wallet address
       // In a real scenario, the SDK's computeWalletAddress would derive this
