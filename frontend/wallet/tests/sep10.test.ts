@@ -164,7 +164,7 @@ describe('signSep10Challenge', () => {
       const tx = new Transaction(signedXdr, PASSPHRASE)
 
       const mdOp = tx.operations.find(op => op.type === 'manageData') as
-        | ReturnType<typeof Operation.manageData>
+        | Operation.ManageData
         | undefined
 
       expect(mdOp).toBeDefined()
