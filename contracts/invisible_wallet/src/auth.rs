@@ -1,5 +1,5 @@
-use crate::WalletError;
 use soroban_sdk::{contracttype, Bytes, BytesN, Env};
+use crate::WalletError;
 
 #[contracttype]
 pub struct WebAuthnSignature {
@@ -10,7 +10,8 @@ pub struct WebAuthnSignature {
     pub nonce: u64,
 }
 
-const BASE64URL: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const BASE64URL: &[u8] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 /// Base64url-encode exactly 32 bytes without padding.
 /// 32 bytes → always 43 output chars: 10 full groups of 3 + 1 group of 2.
@@ -22,7 +23,7 @@ pub fn base64url_encode_32(input: &[u8; 32]) -> [u8; 43] {
         let b0 = input[i] as u32;
         let b1 = input[i + 1] as u32;
         let b2 = input[i + 2] as u32;
-        out[o] = BASE64URL[((b0 >> 2) & 0x3f) as usize];
+        out[o]     = BASE64URL[((b0 >> 2) & 0x3f) as usize];
         out[o + 1] = BASE64URL[(((b0 << 4) | (b1 >> 4)) & 0x3f) as usize];
         out[o + 2] = BASE64URL[(((b1 << 2) | (b2 >> 6)) & 0x3f) as usize];
         out[o + 3] = BASE64URL[(b2 & 0x3f) as usize];
@@ -49,8 +50,8 @@ fn challenge_is_present(client_data_json: &Bytes, signature_payload: &[u8; 32]) 
         return false;
     }
     'outer: for start in 0..=(h_len - n_len) {
-        for (j, byte) in needle.iter().enumerate().take(n_len) {
-            if client_data_json.get_unchecked((start + j) as u32) != *byte {
+        for j in 0..n_len {
+            if client_data_json.get_unchecked((start + j) as u32) != needle[j] {
                 continue 'outer;
             }
         }
@@ -98,7 +99,10 @@ pub fn verify_rp_id(env: &Env, rp_id: &Bytes, auth_data: &Bytes) -> Result<(), W
 /// no `serde` dependency (which would pull in `std`).
 ///
 /// Called from `__check_auth` after signature verification.
-pub fn verify_origin(client_data_json: &Bytes, expected_origin: &Bytes) -> Result<(), WalletError> {
+pub fn verify_origin(
+    client_data_json: &Bytes,
+    expected_origin: &Bytes,
+) -> Result<(), WalletError> {
     // The literal bytes we search for inside clientDataJSON.
     // Using the full key + colon + opening quote so we match the field precisely.
     let needle = b"\"origin\":\"";
@@ -112,8 +116,8 @@ pub fn verify_origin(client_data_json: &Bytes, expected_origin: &Bytes) -> Resul
                 break;
             }
             let mut matched = true;
-            for (j, byte) in needle.iter().enumerate().take(n_len) {
-                if client_data_json.get_unchecked((start + j) as u32) != *byte {
+            for j in 0..n_len {
+                if client_data_json.get_unchecked((start + j) as u32) != needle[j] {
                     matched = false;
                     break;
                 }
@@ -197,8 +201,7 @@ pub fn verify_webauthn(
     //    p256 crate. The host function panics on verification failure;
     //    that surfaces as a HostError in diagnostics, distinguishable
     //    from our explicit WalletError variants by the trap kind.
-    env.crypto()
-        .secp256r1_verify(&public_key, &message_hash, &signature);
+    env.crypto().secp256r1_verify(&public_key, &message_hash, &signature);
 
     Ok(())
 }

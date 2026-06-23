@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, BytesN, Env};
+use soroban_sdk::{contracttype, Env, BytesN};
 
 #[contracttype]
 #[derive(Clone)]
@@ -20,13 +20,9 @@ pub fn has_wasm_hash(env: &Env) -> bool {
 }
 
 pub fn mark_deployed(env: &Env, salt: &BytesN<32>) {
-    env.storage()
-        .instance()
-        .set(&DataKey::Deployed(salt.clone()), &());
+    env.storage().instance().set(&DataKey::Deployed(salt.clone()), &());
 }
 
 pub fn is_deployed(env: &Env, salt: &BytesN<32>) -> bool {
-    env.storage()
-        .instance()
-        .has(&DataKey::Deployed(salt.clone()))
+    env.storage().instance().has(&DataKey::Deployed(salt.clone()))
 }

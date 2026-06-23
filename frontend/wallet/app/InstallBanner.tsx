@@ -126,7 +126,7 @@ export function InstallBanner() {
               Tap the <Share size={16} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'text-bottom' }} /> Share icon in Safari.
             </li>
             <li>
-              Scroll down and tap <span style={{ color: 'var(--off-white)' }}>Add to Home Screen</span> <SquarePlus size={16} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'text-bottom' }} />.
+              Scroll down and tap <span style={{ color: 'var(--off-white)' }}>'Add to Home Screen'</span> <SquarePlus size={16} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'text-bottom' }} />.
             </li>
           </ol>
         </div>

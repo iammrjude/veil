@@ -2,59 +2,60 @@
 #[cfg(test)]
 extern crate alloc;
 use soroban_sdk::{
-    auth::Context, contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN,
-    Env, Map, Symbol, TryFromVal, TryIntoVal, Val, Vec,
-};
+    contract, contractimpl, contracterror,
+    Env, Address, Bytes, BytesN, Vec, Symbol, Val,
+    auth::Context, FromVal, TryFromVal, TryIntoVal, symbol_short, Map};
 
 mod auth;
+mod storage;
+pub mod session_key;
 #[cfg(test)]
 mod auth_failure_tests;
-pub mod session_key;
-mod storage;
-use storage::{AllowanceKey, DataKey, PendingRecovery};
+use storage::{DataKey, AllowanceKey, PendingRecovery};
 
 /// Recovery timelock duration: 3 days in seconds.
 const RECOVERY_DELAY_SECONDS: u64 = 259_200;
+
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum WalletError {
-    AlreadyInitialized = 1,
-    InvalidSignatureFormat = 2,
-    SignerNotAuthorized = 3,
-    InvalidPublicKey = 4,
-    InvalidSignature = 5,
+    AlreadyInitialized          = 1,
+    InvalidSignatureFormat      = 2,
+    SignerNotAuthorized         = 3,
+    InvalidPublicKey            = 4,
+    InvalidSignature            = 5,
     SignatureVerificationFailed = 6,
-    InvalidChallenge = 7,
+    InvalidChallenge            = 7,
     /// The rpIdHash in authenticatorData does not match SHA-256(stored rp_id).
     /// This means the assertion was produced for a different domain.
-    RpIdMismatch = 8,
+    RpIdMismatch                = 8,
     /// The origin field in clientDataJSON does not match the stored origin.
     /// This means the assertion was produced on a different website.
-    OriginMismatch = 9,
+    OriginMismatch              = 9,
     /// Cannot remove the last remaining signer — wallet would become inaccessible.
-    CannotRemoveLastSigner = 10,
+    CannotRemoveLastSigner      = 10,
     /// The signer index does not exist in the signers map.
-    SignerNotFound = 11,
+    SignerNotFound              = 11,
     /// Guardian recovery was requested but no guardian is set on this wallet.
-    NoGuardianSet = 12,
+    NoGuardianSet               = 12,
     /// A recovery is already pending — cannot start another one.
-    RecoveryAlreadyPending = 13,
+    RecoveryAlreadyPending      = 13,
     /// No recovery is pending — nothing to complete or cancel.
-    RecoveryNotPending = 14,
+    RecoveryNotPending          = 14,
     /// The recovery timelock has not yet expired.
-    RecoveryTimelockActive = 15,
+    RecoveryTimelockActive      = 15,
     /// The submitted nonce does not match the on-chain nonce (replay or out-of-order).
-    NonceMismatch = 16,
+    NonceMismatch               = 16,
     /// The allowance is insufficient for this transfer.
-    InsufficientAllowance = 17,
+    InsufficientAllowance       = 17,
     /// The allowance has expired.
-    AllowanceExpired = 18,
+    AllowanceExpired            = 18,
     /// The session key's expiry timestamp has passed.
-    SessionKeyExpired = 19,
+    SessionKeyExpired           = 19,
     /// A session key call violates its ACL (wrong target, selector, or cumulative budget exceeded).
-    SessionKeyAclViolation = 20,
+    SessionKeyAclViolation      = 20,
 }
 
 #[contract]
@@ -255,7 +256,8 @@ impl InvisibleWallet {
                             return Err(WalletError::SignerNotAuthorized);
                         };
                         let amount = if c.args.len() >= 3 {
-                            i128::try_from_val(&env, &c.args.get(2).unwrap()).unwrap_or(0)
+                            i128::try_from_val(&env, &c.args.get(2).unwrap())
+                                .unwrap_or(0)
                         } else {
                             0
                         };
@@ -286,42 +288,32 @@ impl InvisibleWallet {
         //   4. Verify ECDSA signature + challenge binding
         //   5. Verify rpIdHash binding  -> RpIdMismatch
         //   6. Verify origin binding    -> OriginMismatch
-        let parts: Vec<Val> =
-            Vec::try_from_val(&env, &signature).map_err(|_| WalletError::InvalidSignatureFormat)?;
+        let parts: Vec<Val> = Vec::try_from_val(&env, &signature)
+            .map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         if parts.len() != 5 {
             return Err(WalletError::InvalidSignatureFormat);
         }
 
         let public_key: BytesN<65> = parts
-            .get(0)
-            .ok_or(WalletError::InvalidSignatureFormat)?
-            .try_into_val(&env)
-            .map_err(|_| WalletError::InvalidSignatureFormat)?;
+            .get(0).ok_or(WalletError::InvalidSignatureFormat)?
+            .try_into_val(&env).map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         let auth_data: Bytes = parts
-            .get(1)
-            .ok_or(WalletError::InvalidSignatureFormat)?
-            .try_into_val(&env)
-            .map_err(|_| WalletError::InvalidSignatureFormat)?;
+            .get(1).ok_or(WalletError::InvalidSignatureFormat)?
+            .try_into_val(&env).map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         let client_data_json: Bytes = parts
-            .get(2)
-            .ok_or(WalletError::InvalidSignatureFormat)?
-            .try_into_val(&env)
-            .map_err(|_| WalletError::InvalidSignatureFormat)?;
+            .get(2).ok_or(WalletError::InvalidSignatureFormat)?
+            .try_into_val(&env).map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         let sig_bytes: BytesN<64> = parts
-            .get(3)
-            .ok_or(WalletError::InvalidSignatureFormat)?
-            .try_into_val(&env)
-            .map_err(|_| WalletError::InvalidSignatureFormat)?;
+            .get(3).ok_or(WalletError::InvalidSignatureFormat)?
+            .try_into_val(&env).map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         let nonce: u64 = parts
-            .get(4)
-            .ok_or(WalletError::InvalidSignatureFormat)?
-            .try_into_val(&env)
-            .map_err(|_| WalletError::InvalidSignatureFormat)?;
+            .get(4).ok_or(WalletError::InvalidSignatureFormat)?
+            .try_into_val(&env).map_err(|_| WalletError::InvalidSignatureFormat)?;
 
         // Step 1 — Check registered signer
         if !storage::has_signer(&env, &public_key) {
@@ -379,16 +371,22 @@ impl InvisibleWallet {
     /// Set spending limit for a specific token and spender.
     ///
     /// Requires passkey authorization (i.e. from the contract itself).
-    pub fn approve(env: Env, spender: Address, token: Address, amount: i128, expiry: Option<u64>) {
+    pub fn approve(
+        env: Env,
+        spender: Address,
+        token: Address,
+        amount: i128,
+        expiry: Option<u64>,
+    ) {
         env.current_contract_address().require_auth();
-
+        
         if amount <= 0 {
             panic!("Amount must be greater than 0");
         }
 
         let key = storage::DataKey::Allowance(AllowanceKey { spender, token });
         let allowance = storage::Allowance { amount, expiry };
-
+        
         env.storage().persistent().set(&key, &allowance);
     }
 
@@ -410,12 +408,12 @@ impl InvisibleWallet {
         // Require that the contract itself (i.e. the wallet signer) authorizes this call.
         env.current_contract_address().require_auth();
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Guardian, &guardian);
+        env.storage().persistent().set(&DataKey::Guardian, &guardian);
 
-        env.events()
-            .publish((symbol_short!("guardian"), symbol_short!("set")), guardian);
+        env.events().publish(
+            (symbol_short!("guardian"), symbol_short!("set")),
+            guardian,
+        );
     }
 
     /// Initiate a guardian recovery to replace the wallet signer key.
@@ -433,8 +431,7 @@ impl InvisibleWallet {
     /// * `WalletError::RecoveryAlreadyPending` - if a recovery is already in progress.
     pub fn initiate_recovery(env: Env, new_public_key: BytesN<65>) -> Result<(), WalletError> {
         // Verify a guardian is set
-        let guardian: Address = env
-            .storage()
+        let guardian: Address = env.storage()
             .persistent()
             .get(&DataKey::Guardian)
             .ok_or(WalletError::NoGuardianSet)?;
@@ -455,9 +452,7 @@ impl InvisibleWallet {
             recovery_unlock_time,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecoveryPending, &pending);
+        env.storage().persistent().set(&DataKey::RecoveryPending, &pending);
 
         env.events().publish(
             (symbol_short!("recovery"), symbol_short!("init")),
@@ -478,8 +473,7 @@ impl InvisibleWallet {
     /// * `WalletError::RecoveryTimelockActive` - if the timelock has not yet expired.
     pub fn complete_recovery(env: Env) -> Result<(), WalletError> {
         // Retrieve pending recovery
-        let pending: PendingRecovery = env
-            .storage()
+        let pending: PendingRecovery = env.storage()
             .persistent()
             .get(&DataKey::RecoveryPending)
             .ok_or(WalletError::RecoveryNotPending)?;
@@ -523,8 +517,10 @@ impl InvisibleWallet {
         // Remove the pending recovery
         env.storage().persistent().remove(&DataKey::RecoveryPending);
 
-        env.events()
-            .publish((symbol_short!("recovery"), symbol_short!("cancel")), ());
+        env.events().publish(
+            (symbol_short!("recovery"), symbol_short!("cancel")),
+            (),
+        );
 
         Ok(())
     }
@@ -547,18 +543,14 @@ impl InvisibleWallet {
         expiry: u64,
     ) {
         env.current_contract_address().require_auth();
-        session_key::register(
-            &env,
-            key_id,
-            session_key::SessionKeyAcl {
-                pubkey,
-                target_contract,
-                selector,
-                amount_cap,
-                spent: 0,
-                expiry,
-            },
-        );
+        session_key::register(&env, key_id, session_key::SessionKeyAcl {
+            pubkey,
+            target_contract,
+            selector,
+            amount_cap,
+            spent: 0,
+            expiry,
+        });
     }
 
     /// Immediately revoke a session key.
@@ -572,50 +564,26 @@ impl InvisibleWallet {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::auth::Context;
+    use soroban_sdk::{Env, Bytes, BytesN, symbol_short, Map, IntoVal, Val};
+    use soroban_sdk::auth::{CustomAccountInterface, Context};
     use soroban_sdk::testutils::{Address as _, Ledger as _};
-    use soroban_sdk::{Bytes, BytesN, Env, IntoVal, Val};
 
     trait CheckAuthTestHelper {
         fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>);
-        #[allow(non_snake_case)]
-        fn try___check_auth(
-            &self,
-            payload: &BytesN<32>,
-            signature: &Val,
-            contexts: &Vec<Context>,
-        ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
+        fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
     }
 
-    impl CheckAuthTestHelper for InvisibleWalletClient<'_> {
+    impl<'a> CheckAuthTestHelper for InvisibleWalletClient<'a> {
         fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) {
-            self.env
-                .try_invoke_contract_check_auth::<WalletError>(
-                    &self.address,
-                    payload,
-                    *signature,
-                    contexts,
-                )
-                .unwrap();
+            self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts).unwrap();
         }
 
-        #[allow(non_snake_case)]
-        fn try___check_auth(
-            &self,
-            payload: &BytesN<32>,
-            signature: &Val,
-            contexts: &Vec<Context>,
-        ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
-            self.env.try_invoke_contract_check_auth::<WalletError>(
-                &self.address,
-                payload,
-                *signature,
-                contexts,
-            )
+        fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
+            self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts)
         }
     }
-    use p256::ecdsa::{signature::hazmat::PrehashSigner, Signature as P256Sig, SigningKey};
-    use sha2::{Digest, Sha256};
+    use sha2::{Sha256, Digest};
+    use p256::ecdsa::{SigningKey, Signature as P256Sig, signature::hazmat::PrehashSigner};
 
     fn test_keypair() -> (SigningKey, [u8; 65]) {
         let signing_key = SigningKey::from_bytes(&[42u8; 32].into()).unwrap();
@@ -682,17 +650,13 @@ mod test {
     fn build_client_data_json(env: &Env, challenge_b64: &[u8; 43]) -> Bytes {
         let raw = build_client_data_json_raw(challenge_b64);
         let mut cdj = Bytes::new(env);
-        for &b in &raw {
-            cdj.push_back(b);
-        }
+        for &b in &raw { cdj.push_back(b); }
         cdj
     }
 
     fn bytes_from_str(env: &Env, s: &str) -> Bytes {
         let mut b = Bytes::new(env);
-        for &byte in s.as_bytes() {
-            b.push_back(byte);
-        }
+        for &byte in s.as_bytes() { b.push_back(byte); }
         b
     }
 
@@ -701,10 +665,10 @@ mod test {
     #[test]
     fn test_init_registers_signer() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
         let (_, pub_bytes) = test_keypair();
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
     }
@@ -712,11 +676,11 @@ mod test {
     #[test]
     fn test_init_twice_fails() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
         let (_, pub_bytes) = test_keypair();
         let pub_key = BytesN::from_array(&env, &pub_bytes);
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
         client.init(&pub_key, &rp_id, &origin);
         assert_eq!(
@@ -731,12 +695,12 @@ mod test {
     fn test_add_signer_returns_index() {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
 
         let (_, pub_bytes) = test_keypair();
         let (_, pub_bytes_2) = second_keypair();
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
 
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
@@ -752,12 +716,12 @@ mod test {
     fn test_remove_signer() {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
 
         let (_, pub_bytes) = test_keypair();
         let (_, pub_bytes_2) = second_keypair();
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
 
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
@@ -772,11 +736,11 @@ mod test {
     fn test_reject_remove_last_signer() {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
 
         let (_, pub_bytes) = test_keypair();
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
 
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
@@ -791,11 +755,11 @@ mod test {
     fn test_remove_nonexistent_signer() {
         let env = Env::default();
         env.mock_all_auths();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
 
         let (_, pub_bytes) = test_keypair();
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://localhost:5173");
 
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
@@ -849,8 +813,7 @@ mod test {
             Bytes::from_array(&env, &auth_data_raw),
             build_client_data_json(&env, &challenge_b64),
             BytesN::from_array(&env, &sig_bytes),
-        )
-        .unwrap();
+        ).unwrap();
     }
 
     #[test]
@@ -894,8 +857,7 @@ mod test {
             Bytes::from_array(&env, &tampered_auth_data),
             build_client_data_json(&env, &challenge_b64),
             BytesN::from_array(&env, &sig_bytes),
-        )
-        .unwrap();
+        ).unwrap();
     }
 
     // ── Domain binding tests ──────────────────────────────────────────────────
@@ -916,9 +878,7 @@ mod test {
 
         let auth_data_bytes = {
             let mut b = Bytes::new(&env);
-            for &byte in &auth_data {
-                b.push_back(byte);
-            }
+            for &byte in &auth_data { b.push_back(byte); }
             b
         };
 
@@ -954,9 +914,7 @@ mod test {
         let stored_rp_id = bytes_from_str(&env, "localhost");
         let auth_data_bytes = {
             let mut b = Bytes::new(&env);
-            for &byte in &auth_data {
-                b.push_back(byte);
-            }
+            for &byte in &auth_data { b.push_back(byte); }
             b
         };
 
@@ -986,9 +944,9 @@ mod test {
         let (signing_key_2, pub_bytes_2) = second_keypair();
 
         env.mock_all_auths();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://test.example");
         client.init(&BytesN::from_array(&env, &pub_bytes_1), &rp_id, &origin);
         client.add_signer(&BytesN::from_array(&env, &pub_bytes_2));
@@ -1018,9 +976,9 @@ mod test {
         let (signing_key, pub_bytes) = test_keypair();
         let payload = [7u8; 32];
 
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://test.example");
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
 
@@ -1028,23 +986,15 @@ mod test {
             make_webauthn_fixture(&signing_key, &payload, b"localhost");
 
         // First auth with nonce 0 should succeed
-        let signature = Vec::<Val>::from_array(
-            &env,
-            [
-                BytesN::from_array(&env, &pub_bytes).into_val(&env),
-                Bytes::from_array(&env, &auth_data_raw).into_val(&env),
-                build_client_data_json(&env, &challenge_b64).into_val(&env),
-                BytesN::from_array(&env, &sig_bytes).into_val(&env),
-                0u64.into_val(&env),
-            ],
-        )
-        .into_val(&env);
+        let signature = Vec::<Val>::from_array(&env, [
+            BytesN::from_array(&env, &pub_bytes).into_val(&env),
+            Bytes::from_array(&env, &auth_data_raw).into_val(&env),
+            build_client_data_json(&env, &challenge_b64).into_val(&env),
+            BytesN::from_array(&env, &sig_bytes).into_val(&env),
+            0u64.into_val(&env),
+        ]).into_val(&env);
 
-        client.__check_auth(
-            &BytesN::from_array(&env, &payload),
-            &signature,
-            &soroban_sdk::Vec::new(&env),
-        );
+        client.__check_auth(&BytesN::from_array(&env, &payload), &signature, &soroban_sdk::Vec::new(&env));
 
         assert_eq!(client.get_nonce(), 1);
     }
@@ -1055,38 +1005,26 @@ mod test {
         let (signing_key, pub_bytes) = test_keypair();
         let payload = [7u8; 32];
 
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://test.example");
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
 
         let (auth_data_raw, challenge_b64, sig_bytes) =
             make_webauthn_fixture(&signing_key, &payload, b"localhost");
 
-        let signature = Vec::<Val>::from_array(
-            &env,
-            [
-                BytesN::from_array(&env, &pub_bytes).into_val(&env),
-                Bytes::from_array(&env, &auth_data_raw).into_val(&env),
-                build_client_data_json(&env, &challenge_b64).into_val(&env),
-                BytesN::from_array(&env, &sig_bytes).into_val(&env),
-                0u64.into_val(&env),
-            ],
-        )
-        .into_val(&env);
+        let signature = Vec::<Val>::from_array(&env, [
+            BytesN::from_array(&env, &pub_bytes).into_val(&env),
+            Bytes::from_array(&env, &auth_data_raw).into_val(&env),
+            build_client_data_json(&env, &challenge_b64).into_val(&env),
+            BytesN::from_array(&env, &sig_bytes).into_val(&env),
+            0u64.into_val(&env),
+        ]).into_val(&env);
 
-        client.__check_auth(
-            &BytesN::from_array(&env, &payload),
-            &signature,
-            &soroban_sdk::Vec::new(&env),
-        );
+        client.__check_auth(&BytesN::from_array(&env, &payload), &signature, &soroban_sdk::Vec::new(&env));
 
-        let result = client.try___check_auth(
-            &BytesN::from_array(&env, &payload),
-            &signature,
-            &soroban_sdk::Vec::new(&env),
-        );
+        let result = client.try___check_auth(&BytesN::from_array(&env, &payload), &signature, &soroban_sdk::Vec::new(&env));
         assert_eq!(result, Err(Ok(WalletError::NonceMismatch)));
     }
 
@@ -1096,51 +1034,35 @@ mod test {
         let (signing_key, pub_bytes) = test_keypair();
         let payload = [7u8; 32];
 
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-        let rp_id = bytes_from_str(&env, "localhost");
+        let rp_id  = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://test.example");
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
 
         let (auth_data_raw, challenge_b64, sig_bytes) =
             make_webauthn_fixture(&signing_key, &payload, b"localhost");
-        let signature_0 = Vec::<Val>::from_array(
-            &env,
-            [
-                BytesN::from_array(&env, &pub_bytes).into_val(&env),
-                Bytes::from_array(&env, &auth_data_raw).into_val(&env),
-                build_client_data_json(&env, &challenge_b64).into_val(&env),
-                BytesN::from_array(&env, &sig_bytes).into_val(&env),
-                0u64.into_val(&env),
-            ],
-        )
-        .into_val(&env);
-        client.__check_auth(
-            &BytesN::from_array(&env, &payload),
-            &signature_0,
-            &soroban_sdk::Vec::new(&env),
-        );
+        let signature_0 = Vec::<Val>::from_array(&env, [
+            BytesN::from_array(&env, &pub_bytes).into_val(&env),
+            Bytes::from_array(&env, &auth_data_raw).into_val(&env),
+            build_client_data_json(&env, &challenge_b64).into_val(&env),
+            BytesN::from_array(&env, &sig_bytes).into_val(&env),
+            0u64.into_val(&env),
+        ]).into_val(&env);
+        client.__check_auth(&BytesN::from_array(&env, &payload), &signature_0, &soroban_sdk::Vec::new(&env));
         assert_eq!(client.get_nonce(), 1);
 
         let payload_2 = [8u8; 32];
         let (auth_data_raw_2, challenge_b64_2, sig_bytes_2) =
             make_webauthn_fixture(&signing_key, &payload_2, b"localhost");
-        let signature_1 = Vec::<Val>::from_array(
-            &env,
-            [
-                BytesN::from_array(&env, &pub_bytes).into_val(&env),
-                Bytes::from_array(&env, &auth_data_raw_2).into_val(&env),
-                build_client_data_json(&env, &challenge_b64_2).into_val(&env),
-                BytesN::from_array(&env, &sig_bytes_2).into_val(&env),
-                1u64.into_val(&env),
-            ],
-        )
-        .into_val(&env);
-        client.__check_auth(
-            &BytesN::from_array(&env, &payload_2),
-            &signature_1,
-            &soroban_sdk::Vec::new(&env),
-        );
+        let signature_1 = Vec::<Val>::from_array(&env, [
+            BytesN::from_array(&env, &pub_bytes).into_val(&env),
+            Bytes::from_array(&env, &auth_data_raw_2).into_val(&env),
+            build_client_data_json(&env, &challenge_b64_2).into_val(&env),
+            BytesN::from_array(&env, &sig_bytes_2).into_val(&env),
+            1u64.into_val(&env),
+        ]).into_val(&env);
+        client.__check_auth(&BytesN::from_array(&env, &payload_2), &signature_1, &soroban_sdk::Vec::new(&env));
         assert_eq!(client.get_nonce(), 2);
     }
 
@@ -1150,9 +1072,9 @@ mod test {
     fn test_allowance_approve_and_spend() {
         let env = Env::default();
         let (_, pub_bytes) = test_keypair();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-
+        
         let rp_id = bytes_from_str(&env, "localhost");
         let origin = bytes_from_str(&env, "https://test.example");
         client.init(&BytesN::from_array(&env, &pub_bytes), &rp_id, &origin);
@@ -1170,16 +1092,13 @@ mod test {
         let context = Context::Contract(soroban_sdk::auth::ContractContext {
             contract: token.clone(),
             fn_name: Symbol::new(&env, "transfer"),
-            args: Vec::from_array(
-                &env,
-                [
-                    contract_id.to_val(),
-                    Address::generate(&env).to_val(),
-                    200i128.into_val(&env),
-                ],
-            ),
+            args: Vec::from_array(&env, [
+                contract_id.to_val(),
+                Address::generate(&env).to_val(),
+                200i128.into_val(&env),
+            ]),
         });
-
+        
         let contexts = Vec::from_array(&env, [context]);
         let signature = spender.to_val();
 
@@ -1192,15 +1111,11 @@ mod test {
     #[test]
     fn test_allowance_spend_over_limit() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-
+        
         let (_, pub_bytes) = test_keypair();
-        client.init(
-            &BytesN::from_array(&env, &pub_bytes),
-            &bytes_from_str(&env, "localhost"),
-            &bytes_from_str(&env, "https://test.example"),
-        );
+        client.init(&BytesN::from_array(&env, &pub_bytes), &bytes_from_str(&env, "localhost"), &bytes_from_str(&env, "https://test.example"));
 
         let spender = Address::generate(&env);
         let token = Address::generate(&env);
@@ -1211,80 +1126,58 @@ mod test {
         let context = Context::Contract(soroban_sdk::auth::ContractContext {
             contract: token.clone(),
             fn_name: Symbol::new(&env, "transfer"),
-            args: Vec::from_array(
-                &env,
-                [
-                    contract_id.to_val(),
-                    Address::generate(&env).to_val(),
-                    150i128.into_val(&env),
-                ],
-            ),
+            args: Vec::from_array(&env, [
+                contract_id.to_val(),
+                Address::generate(&env).to_val(),
+                150i128.into_val(&env),
+            ]),
         });
 
         let signature = spender.to_val();
-        let res = client.try___check_auth(
-            &BytesN::from_array(&env, &[0; 32]),
-            &signature,
-            &Vec::from_array(&env, [context]),
-        );
+        let res = client.try___check_auth(&BytesN::from_array(&env, &[0; 32]), &signature, &Vec::from_array(&env, [context]));
         assert_eq!(res, Err(Ok(WalletError::InsufficientAllowance)));
     }
 
     #[test]
     fn test_allowance_expired() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-
+        
         let (_, pub_bytes) = test_keypair();
-        client.init(
-            &BytesN::from_array(&env, &pub_bytes),
-            &bytes_from_str(&env, "localhost"),
-            &bytes_from_str(&env, "https://test.example"),
-        );
+        client.init(&BytesN::from_array(&env, &pub_bytes), &bytes_from_str(&env, "localhost"), &bytes_from_str(&env, "https://test.example"));
 
         let spender = Address::generate(&env);
         let token = Address::generate(&env);
 
         env.mock_all_auths();
         env.ledger().set_timestamp(1000);
-
+        
         client.approve(&spender, &token, &500, &Some(500));
 
         let context = Context::Contract(soroban_sdk::auth::ContractContext {
             contract: token.clone(),
             fn_name: Symbol::new(&env, "transfer"),
-            args: Vec::from_array(
-                &env,
-                [
-                    contract_id.to_val(),
-                    Address::generate(&env).to_val(),
-                    100i128.into_val(&env),
-                ],
-            ),
+            args: Vec::from_array(&env, [
+                contract_id.to_val(),
+                Address::generate(&env).to_val(),
+                100i128.into_val(&env),
+            ]),
         });
 
         let signature = spender.to_val();
-        let res = client.try___check_auth(
-            &BytesN::from_array(&env, &[0; 32]),
-            &signature,
-            &Vec::from_array(&env, [context]),
-        );
+        let res = client.try___check_auth(&BytesN::from_array(&env, &[0; 32]), &signature, &Vec::from_array(&env, [context]));
         assert_eq!(res, Err(Ok(WalletError::AllowanceExpired)));
     }
 
     #[test]
     fn test_allowance_exact_boundary() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-
+        
         let (_, pub_bytes) = test_keypair();
-        client.init(
-            &BytesN::from_array(&env, &pub_bytes),
-            &bytes_from_str(&env, "localhost"),
-            &bytes_from_str(&env, "https://test.example"),
-        );
+        client.init(&BytesN::from_array(&env, &pub_bytes), &bytes_from_str(&env, "localhost"), &bytes_from_str(&env, "https://test.example"));
 
         let spender = Address::generate(&env);
         let token = Address::generate(&env);
@@ -1295,22 +1188,15 @@ mod test {
         let context = Context::Contract(soroban_sdk::auth::ContractContext {
             contract: token.clone(),
             fn_name: Symbol::new(&env, "transfer"),
-            args: Vec::from_array(
-                &env,
-                [
-                    contract_id.to_val(),
-                    Address::generate(&env).to_val(),
-                    100i128.into_val(&env),
-                ],
-            ),
+            args: Vec::from_array(&env, [
+                contract_id.to_val(),
+                Address::generate(&env).to_val(),
+                100i128.into_val(&env),
+            ]),
         });
 
         let signature = spender.to_val();
-        client.__check_auth(
-            &BytesN::from_array(&env, &[0; 32]),
-            &signature,
-            &Vec::from_array(&env, [context]),
-        );
+        client.__check_auth(&BytesN::from_array(&env, &[0; 32]), &signature, &Vec::from_array(&env, [context]));
 
         let remaining = client.get_allowance(&spender, &token).unwrap();
         assert_eq!(remaining.amount, 0);
@@ -1319,15 +1205,11 @@ mod test {
     #[test]
     fn test_allowance_overwrite() {
         let env = Env::default();
-        let contract_id = env.register(InvisibleWallet, ());
+        let contract_id = env.register_contract(None, InvisibleWallet);
         let client = InvisibleWalletClient::new(&env, &contract_id);
-
+        
         let (_, pub_bytes) = test_keypair();
-        client.init(
-            &BytesN::from_array(&env, &pub_bytes),
-            &bytes_from_str(&env, "localhost"),
-            &bytes_from_str(&env, "https://test.example"),
-        );
+        client.init(&BytesN::from_array(&env, &pub_bytes), &bytes_from_str(&env, "localhost"), &bytes_from_str(&env, "https://test.example"));
 
         let spender = Address::generate(&env);
         let token = Address::generate(&env);

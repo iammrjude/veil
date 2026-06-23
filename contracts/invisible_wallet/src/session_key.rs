@@ -1,5 +1,5 @@
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Symbol};
 use crate::WalletError;
-use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol};
 
 // Approximate seconds per Stellar ledger — used when converting a wall-clock
 // expiry to a ledger TTL extension.  5 s/ledger is the Stellar target; the
@@ -149,15 +149,11 @@ pub fn enforce(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{
-        symbol_short,
-        testutils::{Address as _, Ledger},
-        Env,
-    };
+    use soroban_sdk::{testutils::{Address as _, Ledger}, Env, symbol_short};
 
     fn setup() -> (Env, Address, Address) {
         let env = Env::default();
-        let contract_id = env.register(crate::InvisibleWallet, ());
+        let contract_id = env.register_contract(None, crate::InvisibleWallet);
         let target = Address::generate(&env);
         (env, contract_id, target)
     }
@@ -191,11 +187,7 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                base_acl(&env, target.clone(), sel.clone()),
-            );
+            register(&env, key_id.clone(), base_acl(&env, target.clone(), sel.clone()));
 
             assert_eq!(
                 enforce(&env, &key_id, &other, &sel, 100),
@@ -215,11 +207,7 @@ mod tests {
         let other_sel = symbol_short!("approve");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                base_acl(&env, target.clone(), sel.clone()),
-            );
+            register(&env, key_id.clone(), base_acl(&env, target.clone(), sel.clone()));
 
             assert_eq!(
                 enforce(&env, &key_id, &target, &other_sel, 100),
@@ -238,18 +226,14 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                SessionKeyAcl {
-                    pubkey: mock_pubkey(&env, 0xBB),
-                    target_contract: target.clone(),
-                    selector: sel.clone(),
-                    amount_cap: 500,
-                    spent: 0,
-                    expiry: env.ledger().timestamp() + 10_000,
-                },
-            );
+            register(&env, key_id.clone(), SessionKeyAcl {
+                pubkey: mock_pubkey(&env, 0xBB),
+                target_contract: target.clone(),
+                selector: sel.clone(),
+                amount_cap: 500,
+                spent: 0,
+                expiry: env.ledger().timestamp() + 10_000,
+            });
 
             assert_eq!(
                 enforce(&env, &key_id, &target, &sel, 501),
@@ -268,18 +252,14 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                SessionKeyAcl {
-                    pubkey: mock_pubkey(&env, 0xCC),
-                    target_contract: target.clone(),
-                    selector: sel.clone(),
-                    amount_cap: 1_000,
-                    spent: 0,
-                    expiry: env.ledger().timestamp() + 10_000,
-                },
-            );
+            register(&env, key_id.clone(), SessionKeyAcl {
+                pubkey: mock_pubkey(&env, 0xCC),
+                target_contract: target.clone(),
+                selector: sel.clone(),
+                amount_cap: 1_000,
+                spent: 0,
+                expiry: env.ledger().timestamp() + 10_000,
+            });
 
             // First call: spend 600
             assert!(enforce(&env, &key_id, &target, &sel, 600).is_ok());
@@ -310,18 +290,14 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                SessionKeyAcl {
-                    pubkey: mock_pubkey(&env, 0xDD),
-                    target_contract: target.clone(),
-                    selector: sel.clone(),
-                    amount_cap: 300,
-                    spent: 0,
-                    expiry: env.ledger().timestamp() + 10_000,
-                },
-            );
+            register(&env, key_id.clone(), SessionKeyAcl {
+                pubkey: mock_pubkey(&env, 0xDD),
+                target_contract: target.clone(),
+                selector: sel.clone(),
+                amount_cap: 300,
+                spent: 0,
+                expiry: env.ledger().timestamp() + 10_000,
+            });
 
             enforce(&env, &key_id, &target, &sel, 100).unwrap(); // spent = 100
             enforce(&env, &key_id, &target, &sel, 100).unwrap(); // spent = 200
@@ -346,18 +322,14 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                SessionKeyAcl {
-                    pubkey: mock_pubkey(&env, 0xEE),
-                    target_contract: target.clone(),
-                    selector: sel.clone(),
-                    amount_cap: 1_000_000,
-                    spent: 0,
-                    expiry: 1_000,
-                },
-            );
+            register(&env, key_id.clone(), SessionKeyAcl {
+                pubkey: mock_pubkey(&env, 0xEE),
+                target_contract: target.clone(),
+                selector: sel.clone(),
+                amount_cap: 1_000_000,
+                spent: 0,
+                expiry: 1_000,
+            });
 
             let mut info = env.ledger().get();
             info.timestamp = 2_000;
@@ -395,11 +367,7 @@ mod tests {
         let sel = symbol_short!("transfer");
 
         env.as_contract(&contract_id, || {
-            register(
-                &env,
-                key_id.clone(),
-                base_acl(&env, target.clone(), sel.clone()),
-            );
+            register(&env, key_id.clone(), base_acl(&env, target.clone(), sel.clone()));
             assert!(enforce(&env, &key_id, &target, &sel, 1).is_ok());
 
             revoke(&env, &key_id);

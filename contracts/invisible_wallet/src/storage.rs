@@ -1,5 +1,6 @@
 use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Map};
 
+
 /// Stores details of a pending guardian recovery request.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -99,14 +100,10 @@ pub fn get_signers(env: &Env) -> Map<u32, BytesN<65>> {
 
 // â”€â”€ Guardian â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-#[allow(dead_code)]
 pub fn set_guardian(env: &Env, guardian_key: &BytesN<65>) {
-    env.storage()
-        .instance()
-        .set(&DataKey::Guardian, guardian_key);
+    env.storage().instance().set(&DataKey::Guardian, guardian_key);
 }
 
-#[allow(dead_code)]
 pub fn get_guardian(env: &Env) -> Option<BytesN<65>> {
     env.storage().instance().get(&DataKey::Guardian)
 }
@@ -138,17 +135,12 @@ pub fn get_origin(env: &Env) -> Option<Bytes> {
 // ── Nonce ───────────────────────────────────────────────────────────────────
 
 pub fn get_nonce(env: &Env) -> u64 {
-    env.storage()
-        .instance()
-        .get(&DataKey::Nonce)
-        .unwrap_or(0u64)
+    env.storage().instance().get(&DataKey::Nonce).unwrap_or(0u64)
 }
 
 pub fn increment_nonce(env: &Env) {
     let current = get_nonce(env);
-    env.storage()
-        .instance()
-        .set(&DataKey::Nonce, &(current + 1));
+    env.storage().instance().set(&DataKey::Nonce, &(current + 1));
 }
 
 #[cfg(test)]

@@ -163,7 +163,12 @@ body {
     grid-template-columns: repeat(6, 1fr);
     gap: 0.4rem;
   }
-  .action-btn { grid-column: span 2; }
+  .action-btn:nth-child(1),
+  .action-btn:nth-child(2),
+  .action-btn:nth-child(3),
+  .action-btn:nth-child(4),
+  .action-btn:nth-child(5),
+  .action-btn:nth-child(6) { grid-column: span 2; }
 }
 
 /* ── Card system ─────────────────────────────────────────────────────── */

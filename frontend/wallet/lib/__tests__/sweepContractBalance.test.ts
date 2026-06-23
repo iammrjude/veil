@@ -25,6 +25,7 @@ import { Keypair, Account, Networks } from '@stellar/stellar-sdk'
 // `: any` return type bypasses TypeScript's strict module-shape checking inside
 // the factory — standard pattern for jest.mock with typed SDK modules.
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 jest.mock('@stellar/stellar-sdk', (): any => {
   const actual = jest.requireActual('@stellar/stellar-sdk')
   return {
@@ -56,6 +57,7 @@ jest.mock('@stellar/stellar-sdk', (): any => {
 
 // ── Typed access to mock fns ──────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sdk = jest.requireMock('@stellar/stellar-sdk') as Record<string, any>
 const mockScValToNative:     jest.Mock = sdk.scValToNative
 const MockServer:            jest.Mock = sdk.rpc.Server

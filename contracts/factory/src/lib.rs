@@ -1,7 +1,5 @@
 #![no_std]
-use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, BytesN, Env, IntoVal, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracterror, symbol_short, Env, Address, BytesN, Vec, IntoVal};
 
 mod storage;
 mod validation;
@@ -11,9 +9,9 @@ mod validation;
 #[repr(u32)]
 pub enum FactoryError {
     AlreadyInitialized = 1,
-    NotInitialized = 2,
-    AlreadyDeployed = 3,
-    InvalidPublicKey = 4,
+    NotInitialized     = 2,
+    AlreadyDeployed    = 3,
+    InvalidPublicKey   = 4,
 }
 
 #[contract]
@@ -32,14 +30,10 @@ impl Factory {
 
     /// Deploy a new invisible_wallet for the given P-256 public key.
     /// Returns the Address of the newly deployed wallet.
-    pub fn deploy(
-        env: Env,
-        public_key: BytesN<65>,
-        rp_id: soroban_sdk::Bytes,
-        origin: soroban_sdk::Bytes,
-    ) -> Result<Address, FactoryError> {
+    pub fn deploy(env: Env, public_key: BytesN<65>, rp_id: soroban_sdk::Bytes, origin: soroban_sdk::Bytes) -> Result<Address, FactoryError> {
         // Step 1: must be initialized
-        let wasm_hash = storage::get_wasm_hash(&env).ok_or(FactoryError::NotInitialized)?;
+        let wasm_hash = storage::get_wasm_hash(&env)
+            .ok_or(FactoryError::NotInitialized)?;
 
         // Step 2: validate public key
         validation::validate_public_key(&public_key)?;
@@ -59,7 +53,7 @@ impl Factory {
         let wallet_address = env
             .deployer()
             .with_address(env.current_contract_address(), salt.clone())
-            .deploy_v2(wasm_hash, ());
+            .deploy(wasm_hash);
 
         let init_args: Vec<soroban_sdk::Val> = (public_key.clone(), rp_id, origin).into_val(&env);
         env.invoke_contract::<soroban_sdk::Val>(&wallet_address, &symbol_short!("init"), init_args);
@@ -77,7 +71,7 @@ impl Factory {
 /// Production code uses `env.crypto().sha256()` (deterministic, same output).
 #[cfg(test)]
 fn sha2_hash(input: &[u8; 65]) -> [u8; 32] {
-    use sha2::{Digest, Sha256};
+    use sha2::{Sha256, Digest};
     let mut hasher = Sha256::new();
     hasher.update(input);
     hasher.finalize().into()
@@ -86,7 +80,7 @@ fn sha2_hash(input: &[u8; 65]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{Bytes, BytesN, Env};
+    use soroban_sdk::{Bytes, Env, BytesN};
 
     const MOCK_WALLET_WASM: &[u8] = include_bytes!("../test-fixtures/mock_wallet.wasm");
 
@@ -134,7 +128,7 @@ mod test {
     #[test]
     fn test_init_stores_wasm_hash() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         let hash = dummy_wasm_hash(&env);
         client.init(&hash);
@@ -146,7 +140,7 @@ mod test {
     #[test]
     fn test_double_init_fails() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         let hash = dummy_wasm_hash(&env);
         client.init(&hash);
@@ -162,7 +156,7 @@ mod test {
     fn test_deploy_happy_path() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
@@ -191,7 +185,7 @@ mod test {
     fn test_duplicate_deploy_fails() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
@@ -217,7 +211,7 @@ mod test {
     fn test_duplicate_deploy_prevented() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
@@ -243,7 +237,7 @@ mod test {
     #[test]
     fn test_deploy_before_init_fails() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         let pub_key = valid_pub_key(&env);
         let rp_id = make_rp_id(&env);
@@ -257,7 +251,7 @@ mod test {
     #[test]
     fn test_invalid_public_key_bad_prefix() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         client.init(&dummy_wasm_hash(&env));
         // Compressed prefix 0x03 instead of uncompressed 0x04
@@ -275,7 +269,7 @@ mod test {
     #[test]
     fn test_invalid_public_key_all_zeros() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         client.init(&dummy_wasm_hash(&env));
         // All zeros — prefix is 0x00, not a valid point
@@ -291,7 +285,7 @@ mod test {
     #[test]
     fn test_invalid_public_key_correct_prefix_but_not_on_curve() {
         let env = make_env();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         client.init(&dummy_wasm_hash(&env));
         // Starts with 0x04 but x,y are all 1s — not a valid P-256 point
@@ -330,7 +324,7 @@ mod test {
         // Deploy in the same environment — second call proves address determinism
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
         let wasm_hash = install_mock_wallet(&env);
         client.init(&wasm_hash);
@@ -351,7 +345,7 @@ mod test {
     fn test_different_keys_produce_different_addresses() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
@@ -371,7 +365,7 @@ mod test {
     fn test_wallet_initialization_registers_signer() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
@@ -397,7 +391,7 @@ mod test {
     fn test_deploy_full_integration() {
         let env = make_env();
         env.mock_all_auths();
-        let contract_id = env.register(Factory, ());
+        let contract_id = env.register_contract(None, Factory);
         let client = FactoryClient::new(&env, &contract_id);
 
         let wasm_hash = install_mock_wallet(&env);
