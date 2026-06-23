@@ -12,6 +12,7 @@ import { trackWalletCreated } from '@/lib/supabase'
 
 const network = getNetwork()
 const HorizonServer = Horizon.Server
+const PLACEHOLDER_FACTORY_CONTRACT_ID = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4'
 
 type Step = 'landing' | 'registering' | 'deploying' | 'done'
 
@@ -47,6 +48,15 @@ export default function OnboardingPage() {
     let success = false
     let signerKeypair: Keypair | null = null
     try {
+      if (
+        !network.factoryContractId
+        || network.factoryContractId === PLACEHOLDER_FACTORY_CONTRACT_ID
+      ) {
+        throw new Error(
+          'Missing wallet factory contract ID. Copy frontend/wallet/.env.example to frontend/wallet/.env.local and set NEXT_PUBLIC_FACTORY_CONTRACT_ID_TESTNET to a deployed testnet factory contract.'
+        )
+      }
+
       const hasStoredPasskey =
         !!localStorage.getItem('invisible_wallet_key_id')
         && !!localStorage.getItem('invisible_wallet_public_key')

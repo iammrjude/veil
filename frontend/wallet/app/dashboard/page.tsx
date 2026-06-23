@@ -676,6 +676,11 @@ function DashboardPageContent() {
             onClick={() => router.push('/withdraw')}
             icon={<path d="M12 21V9m0 0l-4 4m4-4l4 4M3 7V5a2 2 0 012-2h14a2 2 0 012 2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
           />
+          <ActionButton
+            label="Vault"
+            onClick={() => router.push('/vault')}
+            icon={<path d="M7 10V7a5 5 0 0110 0v3M5 10h14v10H5V10zm7 4v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>}
+          />
         </div>
 
         {/* ── Buy crypto ── */}

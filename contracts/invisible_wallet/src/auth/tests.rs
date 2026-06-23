@@ -13,23 +13,48 @@ extern crate alloc;
 
 use p256::ecdsa::{signature::hazmat::PrehashSigner, Signature as P256Sig, SigningKey};
 use sha2::{Digest, Sha256};
-use soroban_sdk::{Bytes, BytesN, Env, IntoVal, Vec, Val};
 use soroban_sdk::auth::Context;
+use soroban_sdk::{Bytes, BytesN, Env, IntoVal, Val, Vec};
 
 use crate::{InvisibleWallet, InvisibleWalletClient, WalletError};
 
 trait CheckAuthTestHelper {
     fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>);
-    fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
+    #[allow(dead_code)]
+    #[allow(non_snake_case)]
+    fn try___check_auth(
+        &self,
+        payload: &BytesN<32>,
+        signature: &Val,
+        contexts: &Vec<Context>,
+    ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
 }
 
-impl<'a> CheckAuthTestHelper for InvisibleWalletClient<'a> {
+impl CheckAuthTestHelper for InvisibleWalletClient<'_> {
     fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) {
-        self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts).unwrap();
+        self.env
+            .try_invoke_contract_check_auth::<WalletError>(
+                &self.address,
+                payload,
+                *signature,
+                contexts,
+            )
+            .unwrap();
     }
 
-    fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
-        self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts)
+    #[allow(non_snake_case)]
+    fn try___check_auth(
+        &self,
+        payload: &BytesN<32>,
+        signature: &Val,
+        contexts: &Vec<Context>,
+    ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
+        self.env.try_invoke_contract_check_auth::<WalletError>(
+            &self.address,
+            payload,
+            *signature,
+            contexts,
+        )
     }
 }
 
@@ -87,7 +112,7 @@ fn make_fixture(
 
     let cdj_hash: [u8; 32] = {
         let mut h = Sha256::new();
-        h.update(&build_client_data_json_bytes());
+        h.update(build_client_data_json_bytes());
         h.finalize().into()
     };
 
@@ -109,7 +134,7 @@ fn run_happy_path(auth_data_size: usize) {
     let env = Env::default();
     let (signing_key, pub_bytes) = test_keypair();
 
-    let contract_id = env.register_contract(None, InvisibleWallet);
+    let contract_id = env.register(InvisibleWallet, ());
     let client = InvisibleWalletClient::new(&env, &contract_id);
 
     client.init(
@@ -145,7 +170,11 @@ fn run_happy_path(auth_data_size: usize) {
         &Vec::new(&env),
     );
 
-    assert_eq!(client.get_nonce(), 1, "nonce must increment after successful auth");
+    assert_eq!(
+        client.get_nonce(),
+        1,
+        "nonce must increment after successful auth"
+    );
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

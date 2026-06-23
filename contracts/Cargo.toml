@@ -4,6 +4,7 @@ members = [
     "factory",
     "mock-wallet",
     "multisig-wallet",
+    "vault",
 ]
 resolver = "2"
 

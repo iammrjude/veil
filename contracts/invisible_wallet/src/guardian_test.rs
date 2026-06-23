@@ -7,7 +7,7 @@ use soroban_sdk::{Address, BytesN, Env};
 fn setup_env() -> (Env, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, InvisibleWallet);
+    let contract_id = env.register(InvisibleWallet, ());
     (env, contract_id)
 }
 

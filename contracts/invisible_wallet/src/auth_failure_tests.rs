@@ -12,28 +12,51 @@
 ///   5. wrong_payload               — valid sig over payload_a submitted with payload_b → InvalidChallenge
 ///   6. invalid_signature_format    — Vec of only 3 elements → InvalidSignatureFormat
 ///   7. non_low_s_sig               — s-half corrupted by XOR → verification failure
-
 #[allow(unused_imports)]
 use super::*;
-use soroban_sdk::{Bytes, BytesN, Env, Vec, IntoVal, Val};
-use soroban_sdk::auth::{CustomAccountInterface, Context};
+use soroban_sdk::auth::Context;
+use soroban_sdk::{Bytes, BytesN, Env, IntoVal, Val, Vec};
 
 trait CheckAuthTestHelper {
     fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>);
-    fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
+    #[allow(non_snake_case)]
+    fn try___check_auth(
+        &self,
+        payload: &BytesN<32>,
+        signature: &Val,
+        contexts: &Vec<Context>,
+    ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>>;
 }
 
-impl<'a> CheckAuthTestHelper for InvisibleWalletClient<'a> {
+impl CheckAuthTestHelper for InvisibleWalletClient<'_> {
     fn __check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) {
-        self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts).unwrap();
+        self.env
+            .try_invoke_contract_check_auth::<WalletError>(
+                &self.address,
+                payload,
+                *signature,
+                contexts,
+            )
+            .unwrap();
     }
 
-    fn try___check_auth(&self, payload: &BytesN<32>, signature: &Val, contexts: &Vec<Context>) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
-        self.env.try_invoke_contract_check_auth::<WalletError>(&self.address, payload, *signature, contexts)
+    #[allow(non_snake_case)]
+    fn try___check_auth(
+        &self,
+        payload: &BytesN<32>,
+        signature: &Val,
+        contexts: &Vec<Context>,
+    ) -> Result<(), Result<WalletError, soroban_sdk::InvokeError>> {
+        self.env.try_invoke_contract_check_auth::<WalletError>(
+            &self.address,
+            payload,
+            *signature,
+            contexts,
+        )
     }
 }
-use sha2::{Sha256, Digest};
-use p256::ecdsa::{SigningKey, Signature as P256Sig, signature::hazmat::PrehashSigner};
+use p256::ecdsa::{signature::hazmat::PrehashSigner, Signature as P256Sig, SigningKey};
+use sha2::{Digest, Sha256};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +76,9 @@ fn keypair_b() -> (SigningKey, [u8; 65]) {
 
 fn str_to_bytes(env: &Env, s: &str) -> Bytes {
     let mut b = Bytes::new(env);
-    for &byte in s.as_bytes() { b.push_back(byte); }
+    for &byte in s.as_bytes() {
+        b.push_back(byte);
+    }
     b
 }
 
@@ -67,7 +92,7 @@ fn base64url_32(input: &[u8; 32]) -> [u8; 43] {
         let b0 = input[i] as u32;
         let b1 = input[i + 1] as u32;
         let b2 = input[i + 2] as u32;
-        out[o]     = T[((b0 >> 2) & 0x3f) as usize];
+        out[o] = T[((b0 >> 2) & 0x3f) as usize];
         out[o + 1] = T[(((b0 << 4) | (b1 >> 4)) & 0x3f) as usize];
         out[o + 2] = T[(((b1 << 2) | (b2 >> 6)) & 0x3f) as usize];
         out[o + 3] = T[(b2 & 0x3f) as usize];
@@ -91,12 +116,23 @@ fn make_cdj(env: &Env, payload: &[u8; 32]) -> Bytes {
 
     let mut buf = [0u8; 256];
     let mut pos = 0usize;
-    for &b in prefix { buf[pos] = b; pos += 1; }
-    for &b in &challenge { buf[pos] = b; pos += 1; }
-    for &b in suffix { buf[pos] = b; pos += 1; }
+    for &b in prefix {
+        buf[pos] = b;
+        pos += 1;
+    }
+    for &b in &challenge {
+        buf[pos] = b;
+        pos += 1;
+    }
+    for &b in suffix {
+        buf[pos] = b;
+        pos += 1;
+    }
 
     let mut out = Bytes::new(env);
-    for i in 0..pos { out.push_back(buf[i]); }
+    for &byte in buf.iter().take(pos) {
+        out.push_back(byte);
+    }
     out
 }
 
@@ -120,16 +156,31 @@ fn sign_webauthn(sk: &SigningKey, payload: &[u8; 32], ad: &Bytes) -> [u8; 64] {
 
     let mut buf = [0u8; 256];
     let mut pos = 0usize;
-    for &b in prefix { buf[pos] = b; pos += 1; }
-    for &b in &challenge { buf[pos] = b; pos += 1; }
-    for &b in suffix { buf[pos] = b; pos += 1; }
+    for &b in prefix {
+        buf[pos] = b;
+        pos += 1;
+    }
+    for &b in &challenge {
+        buf[pos] = b;
+        pos += 1;
+    }
+    for &b in suffix {
+        buf[pos] = b;
+        pos += 1;
+    }
 
-    let cdj_hash: [u8; 32] = { let mut h = Sha256::new(); h.update(&buf[..pos]); h.finalize().into() };
+    let cdj_hash: [u8; 32] = {
+        let mut h = Sha256::new();
+        h.update(&buf[..pos]);
+        h.finalize().into()
+    };
 
     // authData bytes from the Soroban Bytes value.
     let mut ad_buf = [0u8; 64];
     let ad_len = ad.len() as usize;
-    for i in 0..ad_len { ad_buf[i] = ad.get_unchecked(i as u32); }
+    for (i, slot) in ad_buf.iter_mut().enumerate().take(ad_len) {
+        *slot = ad.get_unchecked(i as u32);
+    }
 
     let msg_hash: [u8; 32] = {
         let mut h = Sha256::new();
@@ -145,20 +196,31 @@ fn sign_webauthn(sk: &SigningKey, payload: &[u8; 32], ad: &Bytes) -> [u8; 64] {
 
 /// Build the 5-element Val expected by `__check_auth`:
 /// `[pubkey(65), auth_data, client_data_json, sig(64), nonce]`
-fn sig_vec(env: &Env, pub_bytes: &[u8; 65], ad: &Bytes, cdj: &Bytes, sig: &[u8; 64], nonce: u64) -> Val {
-    Vec::<Val>::from_array(env, [
-        BytesN::from_array(env, pub_bytes).into_val(env),
-        ad.clone().into_val(env),
-        cdj.clone().into_val(env),
-        BytesN::<64>::from_array(env, sig).into_val(env),
-        nonce.into_val(env),
-    ]).into_val(env)
+fn sig_vec(
+    env: &Env,
+    pub_bytes: &[u8; 65],
+    ad: &Bytes,
+    cdj: &Bytes,
+    sig: &[u8; 64],
+    nonce: u64,
+) -> Val {
+    Vec::<Val>::from_array(
+        env,
+        [
+            BytesN::from_array(env, pub_bytes).into_val(env),
+            ad.clone().into_val(env),
+            cdj.clone().into_val(env),
+            BytesN::<64>::from_array(env, sig).into_val(env),
+            nonce.into_val(env),
+        ],
+    )
+    .into_val(env)
 }
 
 /// Deploy a fresh wallet registered with keypair_a.
 fn setup(env: &Env) -> (InvisibleWalletClient, [u8; 65], SigningKey) {
     let (sk_a, pub_a) = keypair_a();
-    let id = env.register_contract(None, InvisibleWallet);
+    let id = env.register(InvisibleWallet, ());
     let client = InvisibleWalletClient::new(env, &id);
     client.init(
         &BytesN::from_array(env, &pub_a),
@@ -179,7 +241,7 @@ fn expired_valid_until_ledger_returns_nonce_mismatch() {
     let (client, pub_a, sk_a) = setup(&env);
 
     let payload = [0x10u8; 32];
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload);
     let sig = sign_webauthn(&sk_a, &payload, &ad);
 
@@ -197,8 +259,11 @@ fn expired_valid_until_ledger_returns_nonce_mismatch() {
         &sig_vec(&env, &pub_a, &ad, &cdj, &sig, 0),
         &Vec::new(&env),
     );
-    assert_eq!(result, Err(Ok(WalletError::NonceMismatch)),
-        "stale nonce must yield NonceMismatch");
+    assert_eq!(
+        result,
+        Err(Ok(WalletError::NonceMismatch)),
+        "stale nonce must yield NonceMismatch"
+    );
 }
 
 // ── Test 2: replay — exact same triple submitted twice ───────────────────────
@@ -209,7 +274,7 @@ fn replayed_nonce_returns_nonce_mismatch() {
     let (client, pub_a, sk_a) = setup(&env);
 
     let payload = [0x20u8; 32];
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload);
     let sig = sign_webauthn(&sk_a, &payload, &ad);
     let sig_val = sig_vec(&env, &pub_a, &ad, &cdj, &sig, 0);
@@ -227,8 +292,11 @@ fn replayed_nonce_returns_nonce_mismatch() {
         &sig_vec(&env, &pub_a, &ad, &cdj, &sig, 0), // same nonce=0
         &Vec::new(&env),
     );
-    assert_eq!(result, Err(Ok(WalletError::NonceMismatch)),
-        "replayed nonce must return NonceMismatch");
+    assert_eq!(
+        result,
+        Err(Ok(WalletError::NonceMismatch)),
+        "replayed nonce must return NonceMismatch"
+    );
 }
 
 // ── Test 3: signature from unregistered key → SignerNotAuthorized ─────────────
@@ -240,7 +308,7 @@ fn wrong_key_returns_signer_not_authorized() {
     let (sk_b, pub_b) = keypair_b(); // never registered
 
     let payload = [0x30u8; 32];
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload);
     let sig = sign_webauthn(&sk_b, &payload, &ad);
 
@@ -249,8 +317,11 @@ fn wrong_key_returns_signer_not_authorized() {
         &sig_vec(&env, &pub_b, &ad, &cdj, &sig, 0),
         &Vec::new(&env),
     );
-    assert_eq!(result, Err(Ok(WalletError::SignerNotAuthorized)),
-        "unregistered key must return SignerNotAuthorized");
+    assert_eq!(
+        result,
+        Err(Ok(WalletError::SignerNotAuthorized)),
+        "unregistered key must return SignerNotAuthorized"
+    );
 }
 
 // ── Test 4: malformed DER / all-zero sig bytes → verification failure ─────────
@@ -266,7 +337,7 @@ fn malformed_sig_bytes_returns_verification_failed() {
     let (client, pub_a, _sk_a) = setup(&env);
 
     let payload = [0x40u8; 32];
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload);
     let bad = [0u8; 64]; // 64 zero bytes — not a valid ECDSA sig
 
@@ -276,10 +347,18 @@ fn malformed_sig_bytes_returns_verification_failed() {
         &Vec::new(&env),
     );
     assert!(
-        matches!(result, Err(Ok(WalletError::SignatureVerificationFailed)) | Err(Err(_))),
-        "malformed sig must not succeed; got {:?}", result
+        matches!(
+            result,
+            Err(Ok(WalletError::SignatureVerificationFailed)) | Err(Err(_))
+        ),
+        "malformed sig must not succeed; got {:?}",
+        result
     );
-    assert_eq!(client.get_nonce(), 0, "nonce must not advance on failed auth");
+    assert_eq!(
+        client.get_nonce(),
+        0,
+        "nonce must not advance on failed auth"
+    );
 }
 
 // ── Test 5: wrong payload (challenge mismatch) → InvalidChallenge ────────────
@@ -295,7 +374,7 @@ fn wrong_payload_returns_invalid_challenge() {
     let payload_a = [0x50u8; 32];
     let payload_b = [0x51u8; 32]; // different
 
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload_a); // challenge binds to payload_a
     let sig = sign_webauthn(&sk_a, &payload_a, &ad);
 
@@ -304,9 +383,16 @@ fn wrong_payload_returns_invalid_challenge() {
         &sig_vec(&env, &pub_a, &ad, &cdj, &sig, 0),
         &Vec::new(&env),
     );
-    assert_eq!(result, Err(Ok(WalletError::InvalidChallenge)),
-        "mismatched payload must return InvalidChallenge");
-    assert_eq!(client.get_nonce(), 0, "nonce must not advance on challenge failure");
+    assert_eq!(
+        result,
+        Err(Ok(WalletError::InvalidChallenge)),
+        "mismatched payload must return InvalidChallenge"
+    );
+    assert_eq!(
+        client.get_nonce(),
+        0,
+        "nonce must not advance on challenge failure"
+    );
 }
 
 // ── Test 6: Vec of wrong length → InvalidSignatureFormat ────────────────────
@@ -322,19 +408,23 @@ fn invalid_sig_format_returns_format_error() {
     let payload = [0x60u8; 32];
 
     // Only 3 elements — missing sig_bytes and nonce.
-    let short: Val = Vec::<Val>::from_array(&env, [
-        BytesN::from_array(&env, &pub_a).into_val(&env),
-        make_auth_data(&env, "test.veil").into_val(&env),
-        make_cdj(&env, &payload).into_val(&env),
-    ]).into_val(&env);
+    let short: Val = Vec::<Val>::from_array(
+        &env,
+        [
+            BytesN::from_array(&env, &pub_a).into_val(&env),
+            make_auth_data(&env, "test.veil").into_val(&env),
+            make_cdj(&env, &payload).into_val(&env),
+        ],
+    )
+    .into_val(&env);
 
-    let result = client.try___check_auth(
-        &BytesN::from_array(&env, &payload),
-        &short,
-        &Vec::new(&env),
+    let result =
+        client.try___check_auth(&BytesN::from_array(&env, &payload), &short, &Vec::new(&env));
+    assert_eq!(
+        result,
+        Err(Ok(WalletError::InvalidSignatureFormat)),
+        "3-element Vec must return InvalidSignatureFormat"
     );
-    assert_eq!(result, Err(Ok(WalletError::InvalidSignatureFormat)),
-        "3-element Vec must return InvalidSignatureFormat");
 }
 
 // ── Test 7: non-low-S (corrupted s-component) → verification failure ─────────
@@ -349,7 +439,7 @@ fn non_low_s_sig_returns_verification_failed() {
     let (client, pub_a, sk_a) = setup(&env);
 
     let payload = [0x70u8; 32];
-    let ad  = make_auth_data(&env, "test.veil");
+    let ad = make_auth_data(&env, "test.veil");
     let cdj = make_cdj(&env, &payload);
     let sig = sign_webauthn(&sk_a, &payload, &ad);
 
@@ -363,8 +453,16 @@ fn non_low_s_sig_returns_verification_failed() {
         &Vec::new(&env),
     );
     assert!(
-        matches!(result, Err(Ok(WalletError::SignatureVerificationFailed)) | Err(Err(_))),
-        "corrupted s-component must not pass verification; got {:?}", result
+        matches!(
+            result,
+            Err(Ok(WalletError::SignatureVerificationFailed)) | Err(Err(_))
+        ),
+        "corrupted s-component must not pass verification; got {:?}",
+        result
     );
-    assert_eq!(client.get_nonce(), 0, "nonce must not advance on corrupted-s failure");
+    assert_eq!(
+        client.get_nonce(),
+        0,
+        "nonce must not advance on corrupted-s failure"
+    );
 }

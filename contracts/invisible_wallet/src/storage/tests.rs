@@ -1,17 +1,17 @@
 extern crate alloc;
 
 use alloc::vec;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{
     xdr::{ScBytes, ScSymbol, ScVal, ScVec},
     Address, BytesN, Env,
 };
-use soroban_sdk::testutils::Address as _;
 
 use super::{AllowanceKey, DataKey};
 
 // Exhaustive match: adding a variant without updating these tests causes a compile error.
 fn _cover_all_variants(key: &DataKey) {
-    let _ = match key {
+    match key {
         DataKey::Signer(_) => (),
         DataKey::Signers => (),
         DataKey::Guardian => (),

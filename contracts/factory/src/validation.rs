@@ -1,5 +1,5 @@
-use soroban_sdk::BytesN;
 use crate::FactoryError;
+use soroban_sdk::BytesN;
 
 /// Sanity-check that public_key is the SEC1 uncompressed encoding of a P-256 point.
 ///
@@ -13,7 +13,7 @@ pub fn validate_public_key(public_key: &BytesN<65>) -> Result<(), FactoryError> 
     if bytes[0] != 0x04 {
         return Err(FactoryError::InvalidPublicKey);
     }
-    #[cfg(any(test, feature = "testutils"))]
+    #[cfg(test)]
     {
         p256::ecdsa::VerifyingKey::from_sec1_bytes(&bytes)
             .map_err(|_| FactoryError::InvalidPublicKey)?;

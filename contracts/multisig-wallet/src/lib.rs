@@ -1,8 +1,6 @@
 //! Multisig wallet contract
 #![no_std]
-use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, Env, Symbol, Vec
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Symbol, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,12 +35,14 @@ impl MultisigContract {
         if threshold == 0 {
             panic!("threshold must be greater than 0");
         }
-        if owners.len() < threshold as u32 {
+        if owners.len() < threshold {
             panic!("threshold cannot exceed owners length");
         }
 
         env.storage().instance().set(&DataKey::Owners, &owners);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::ProposalCount, &0u64);
     }
@@ -51,7 +51,11 @@ impl MultisigContract {
     pub fn propose_transaction(env: Env, caller: Address, to: Address, amount: i128) -> u64 {
         caller.require_auth();
 
-        let owners: Vec<Address> = env.storage().instance().get(&DataKey::Owners).expect("not initialized");
+        let owners: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owners)
+            .expect("not initialized");
         let mut is_owner = false;
         for owner in owners.iter() {
             if owner == caller {
@@ -63,9 +67,15 @@ impl MultisigContract {
             panic!("caller is not an owner");
         }
 
-        let mut count: u64 = env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0);
+        let mut count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0);
         count += 1;
-        env.storage().instance().set(&DataKey::ProposalCount, &count);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCount, &count);
 
         let proposal = Proposal {
             id: count,
@@ -75,12 +85,12 @@ impl MultisigContract {
             executed: false,
         };
 
-        env.storage().instance().set(&DataKey::Proposal(count), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::Proposal(count), &proposal);
 
-        env.events().publish(
-            (Symbol::new(&env, "propose"), count),
-            (caller, to, amount),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "propose"), count), (caller, to, amount));
 
         count
     }
@@ -90,7 +100,11 @@ impl MultisigContract {
         signer.require_auth();
 
         // Check if signer is an owner
-        let owners: Vec<Address> = env.storage().instance().get(&DataKey::Owners).expect("not initialized");
+        let owners: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owners)
+            .expect("not initialized");
         let mut is_owner = false;
         for owner in owners.iter() {
             if owner == signer {
@@ -103,7 +117,11 @@ impl MultisigContract {
         }
 
         // Fetch proposal
-        let mut proposal: Proposal = env.storage().instance().get(&DataKey::Proposal(proposal_id)).expect("proposal not found");
+        let mut proposal: Proposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("proposal not found");
         if proposal.executed {
             panic!("proposal already executed");
         }
@@ -131,7 +149,11 @@ impl MultisigContract {
             proposal.executed = true;
             let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
             let token_client = token::Client::new(&env, &token_address);
-            token_client.transfer(&env.current_contract_address(), &proposal.to, &proposal.amount);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &proposal.to,
+                &proposal.amount,
+            );
 
             env.events().publish(
                 (Symbol::new(&env, "execute"), proposal_id),
@@ -139,39 +161,53 @@ impl MultisigContract {
             );
         }
 
-        env.storage().instance().set(&DataKey::Proposal(proposal_id), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
     }
 
     /// Query a proposal (to, amount, approvals)
     pub fn get_proposal(env: Env, proposal_id: u64) -> Proposal {
-        env.storage().instance().get(&DataKey::Proposal(proposal_id)).expect("proposal not found")
+        env.storage()
+            .instance()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("proposal not found")
     }
 
     /// Query the configuration
     pub fn get_owners(env: Env) -> Vec<Address> {
-        env.storage().instance().get(&DataKey::Owners).expect("not initialized")
+        env.storage()
+            .instance()
+            .get(&DataKey::Owners)
+            .expect("not initialized")
     }
 
     pub fn get_threshold(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::Threshold).expect("not initialized")
+        env.storage()
+            .instance()
+            .get(&DataKey::Threshold)
+            .expect("not initialized")
     }
 
     pub fn get_proposal_count(env: Env) -> u64 {
-        env.storage().instance().get(&DataKey::ProposalCount).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{Env, Address, testutils::Address as _};
+    use soroban_sdk::{testutils::Address as _, Address, Env};
 
     #[test]
     fn test_multisig_flow() {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, MultisigContract);
+        let contract_id = env.register(MultisigContract, ());
         let client = MultisigContractClient::new(&env, &contract_id);
 
         let owner1 = Address::generate(&env);
@@ -179,7 +215,9 @@ mod tests {
         let owner3 = Address::generate(&env);
 
         let token_admin = Address::generate(&env);
-        let token = env.register_stellar_asset_contract(token_admin.clone());
+        let token = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
         let token_client = token::Client::new(&env, &token);
 
         // Mint some tokens to the multisig contract so it has funds to transfer
@@ -201,18 +239,18 @@ mod tests {
         assert_eq!(prop_id, 1);
 
         let proposal = client.get_proposal(&1);
-        assert_eq!(proposal.executed, false);
+        assert!(!proposal.executed);
         assert_eq!(proposal.approvals.len(), 0);
 
         client.sign_transaction(&1, &owner1);
         let proposal = client.get_proposal(&1);
         assert_eq!(proposal.approvals.len(), 1);
-        assert_eq!(proposal.executed, false);
+        assert!(!proposal.executed);
 
         client.sign_transaction(&1, &owner2);
         let proposal = client.get_proposal(&1);
         assert_eq!(proposal.approvals.len(), 2);
-        assert_eq!(proposal.executed, true);
+        assert!(proposal.executed);
 
         // Check that the transfer actually happened
         assert_eq!(token_client.balance(&to), 100);
